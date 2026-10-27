@@ -91,6 +91,7 @@ class ChatViewModel @Inject constructor(
     private val addons: com.cherry.butler.core.generation.PromptAddons,
     private val writerPrefs: com.cherry.butler.core.data.WriterPrefs,
     private val memoryThoughts: com.cherry.butler.core.data.MemoryThoughts,
+    private val outfits: com.cherry.butler.core.data.PersonaOutfits,
 ) : ViewModel() {
 
     /** Whether the keyboard goes down as a message is sent (Settings). */
@@ -771,6 +772,29 @@ class ChatViewModel @Inject constructor(
         const val KEY_INTRO = "intro"
         const val NO_EDIT = -1L
     }
+
+    // ---- outfits (fork) ----
+    /** The outfits of the persona playing in this chat. */
+    val wardrobe: StateFlow<com.cherry.butler.core.data.Wardrobe> by lazy {
+        combine(outfits.all, activePersona) { _, p -> outfits.of(p?.id) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.cherry.butler.core.data.Wardrobe())
+    }
+    private val _wearing = MutableStateFlow(false)
+    val wearing: StateFlow<Boolean> = _wearing.asStateFlow()
+
+    /** Puts the outfit on, on Janitor, for the persona playing here; the next reply sees it. */
+    fun wearOutfit(o: com.cherry.butler.core.data.Outfit) {
+        if (_wearing.value) return
+        val personaId = activePersona.value?.id
+        viewModelScope.launch {
+            _wearing.value = true
+            runCatching { outfits.wear(personaId, o) }
+                .onSuccess { _notices.trySend("Wearing ${o.name}. The next reply sees it.") }
+                .onFailure { _notices.trySend("Outfit not changed. ${(it as? ApiError ?: ApiError.Unknown(it)).userMessage()}") }
+            _wearing.value = false
+        }
+    }
+
 }
 
 /** Where a picture goes in a draft until it is written in (beta). */

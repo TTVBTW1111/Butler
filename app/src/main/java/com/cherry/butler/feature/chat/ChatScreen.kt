@@ -32,6 +32,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -459,6 +460,20 @@ fun ChatScreen(
         )
     }
 
+    // Outfits (fork): the playing persona's, put on from here at once.
+    val wardrobe by viewModel.wardrobe.collectAsStateWithLifecycle()
+    val wearing by viewModel.wearing.collectAsStateWithLifecycle()
+    var outfitOpen by remember { mutableStateOf(false) }
+    if (outfitOpen) {
+        OutfitSheet(
+            wardrobe = wardrobe,
+            personaName = activePersona?.name,
+            busy = wearing,
+            onWear = { viewModel.wearOutfit(it); outfitOpen = false },
+            onDismiss = { outfitOpen = false },
+        )
+    }
+
     if (backgroundOpen) {
         com.cherry.butler.feature.settings.BackgroundsSheet(chatId = viewModel.chatId, onDismiss = { backgroundOpen = false })
     }
@@ -547,6 +562,7 @@ fun ChatScreen(
                         onBackground = { backgroundOpen = true },
                         richOn = richOn,
                         onRich = { viewModel.setRich(!richOn) },
+                        onOutfit = if (wardrobe.outfits.isNotEmpty()) ({ outfitOpen = true }) else null,
                     )
                 }
                 if (searching) {
@@ -1509,3 +1525,40 @@ private fun glideStep(offset: Int): Int = (offset * FOLLOW_EASE).toInt().coerceA
 
 /** Share of the remaining distance closed per frame: a quick, soft glide. */
 private const val FOLLOW_EASE = 0.16f
+
+
+/** Fork: the playing persona's outfits; one tap puts it on, on Janitor. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun OutfitSheet(
+    wardrobe: com.cherry.butler.core.data.Wardrobe,
+    personaName: String?,
+    busy: Boolean,
+    onWear: (com.cherry.butler.core.data.Outfit) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = com.cherry.butler.core.design.SheetShape,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        scrimColor = com.cherry.butler.ui.components.SheetScrim,
+        dragHandle = { com.cherry.butler.ui.components.SheetHandle() },
+    ) {
+        Column(modifier = Modifier.navigationBarsPadding().padding(bottom = 12.dp)) {
+            com.cherry.butler.core.design.PlateText(
+                "Outfit" + (personaName?.let { " · $it" } ?: ""),
+                com.cherry.butler.core.design.PlateLevel.Name,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            )
+            wardrobe.outfits.forEach { o ->
+                com.cherry.butler.feature.settings.ChoiceRow(
+                    title = o.name,
+                    subtitle = o.appearance.lines().joinToString(" ").take(90),
+                    selected = o.id == wardrobe.wornId,
+                    busy = busy,
+                    onClick = { if (!busy) onWear(o) },
+                )
+            }
+        }
+    }
+}

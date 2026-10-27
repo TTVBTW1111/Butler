@@ -58,6 +58,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 data class PersonaForm(
@@ -90,6 +92,7 @@ class PersonaEditorViewModel @Inject constructor(
     private val writer: com.cherry.butler.core.generation.DescriptionWriter,
     private val transfer: com.cherry.butler.core.data.PersonaTransfer,
     private val pictures: com.cherry.butler.core.data.PictureUpload,
+    private val outfits: com.cherry.butler.core.data.PersonaOutfits,
 ) : ViewModel() {
 
     /** A picture for the bio, from the media library once Janitor approves it. */
@@ -198,6 +201,22 @@ class PersonaEditorViewModel @Inject constructor(
 
     fun update(change: (PersonaForm) -> PersonaForm) = _form.update { change(it).copy(error = null) }
 
+    // ---- outfits (fork) ----
+    /** Whose outfits these are: the persona's id, null for the profile. A new persona has none yet. */
+    private val outfitKey: String? get() = if (isDefault) null else personaId
+    val canHaveOutfits: Boolean get() = !isNew
+    val wardrobe: StateFlow<com.cherry.butler.core.data.Wardrobe> = outfits.all
+        .map { outfits.of(outfitKey) }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, if (isNew) com.cherry.butler.core.data.Wardrobe() else outfits.of(outfitKey))
+
+    fun wearInEditor(o: com.cherry.butler.core.data.Outfit) {
+        update { it.copy(appearance = o.appearance) }
+        outfits.markWorn(outfitKey, o.id)
+    }
+    fun addOutfit(name: String) { outfits.add(outfitKey, name, _form.value.appearance) }
+    fun renameOutfit(o: com.cherry.butler.core.data.Outfit, name: String) = outfits.rename(outfitKey, o.id, name)
+    fun removeOutfit(o: com.cherry.butler.core.data.Outfit) = outfits.remove(outfitKey, o.id)
+
     fun save(onDone: () -> Unit) {
         val f = _form.value
         if (f.saving || f.name.isBlank()) return
@@ -217,7 +236,7 @@ class PersonaEditorViewModel @Inject constructor(
                     isDefault -> editing.updateProfile(draft)
                     else -> editing.update(personaId!!, draft)
                 }
-            }.onSuccess { onDone() }
+            }.onSuccess { if (!isNew) outfits.saved(outfitKey, f.appearance); onDone() }
                 .onFailure { e ->
                     val message = (e as? ApiError ?: ApiError.Unknown(e)).userMessage()
                     _form.update { it.copy(saving = false, error = if (isDefault && f.newPicture != null) "Janitor didn't take the picture. $message" else "Not saved. $message") }
@@ -367,6 +386,18 @@ fun PersonaEditorScreen(onBack: () -> Unit, viewModel: PersonaEditorViewModel = 
             onStop = viewModel::stopEnhance,
             onUndo = viewModel::undoEnhance,
         )
+        if (viewModel.canHaveOutfits) {
+            val wardrobe by viewModel.wardrobe.collectAsStateWithLifecycle()
+            OutfitsSection(
+                wardrobe = wardrobe,
+                current = form.appearance,
+                enabled = !form.saving && !enhance.running,
+                onWear = viewModel::wearInEditor,
+                onAdd = viewModel::addOutfit,
+                onRename = viewModel::renameOutfit,
+                onRemove = viewModel::removeOutfit,
+            )
+        }
         if (viewModel.isDefault) {
             com.cherry.butler.ui.components.RichHtmlEditor(
                 label = "About me, on your public profile",
