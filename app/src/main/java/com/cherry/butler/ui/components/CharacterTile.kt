@@ -1,5 +1,7 @@
 package com.cherry.butler.ui.components
 
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -128,6 +130,9 @@ fun CharacterTile(
     edgeColor: Color? = null,
     corner: Dp? = null,
     nameColor: Color? = null,
+    /** Fork: the heart in the portrait's corner. Null draws none; [onFavorite] toggles it. */
+    favorite: Boolean? = null,
+    onFavorite: (() -> Unit)? = null,
     footer: @Composable () -> Unit,
 ) {
     val height = portraitHeight(width)
@@ -205,6 +210,13 @@ fun CharacterTile(
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
+            }
+            if (favorite != null && onFavorite != null) {
+                FavoriteHeart(
+                    on = favorite,
+                    onClick = onFavorite,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                )
             }
             if (nsfw) {
                 Text(
@@ -419,5 +431,34 @@ fun SkeletonTile(width: Dp) {
             SkeletonBlock(width = width * 0.85f, height = 10.dp, alpha = alpha)
             SkeletonBlock(width = width * 0.7f, height = 10.dp, alpha = alpha)
         }
+    }
+}
+
+
+/**
+ * The heart on a card (fork): a round dark chip over the picture, so it reads on any portrait.
+ * Its own click, so favouriting while scrolling never opens the character.
+ */
+@Composable
+private fun FavoriteHeart(on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val tint by animateColorAsState(
+        if (on) MaterialTheme.colorScheme.primary else Color.White,
+        animationSpec = Motion.enter(Motion.SHORT),
+        label = "heart-tint",
+    )
+    Box(
+        modifier = modifier
+            .size(34.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(ButlerTheme.colors.chrome.copy(alpha = 0.72f))
+            .clickable(onClickLabel = if (on) "Unfavourite" else "Favourite", onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (on) androidx.compose.material.icons.Icons.Filled.Favorite else androidx.compose.material.icons.Icons.Outlined.FavoriteBorder,
+            contentDescription = if (on) "Unfavourite" else "Favourite",
+            tint = tint,
+            modifier = Modifier.size(19.dp),
+        )
     }
 }

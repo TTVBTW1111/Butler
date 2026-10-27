@@ -161,6 +161,8 @@ fun BrowseScreen(
             onAddCustom = viewModel::onCustomTagAdded,
         )
         val paged by viewModel.paged.collectAsStateWithLifecycle()
+        val favoriteIds = viewModel.favoriteIdsOrNull.collectAsStateWithLifecycle().value
+        val favoriteError = viewModel.favoriteError.collectAsStateWithLifecycle().value
         if (paged) {
             val page by viewModel.page.collectAsStateWithLifecycle()
             PagedRoster(
@@ -172,6 +174,9 @@ fun BrowseScreen(
                 onRetry = viewModel::retryPage,
                 onCharacterClick = onCharacterClick,
                 letGo = letGo,
+                favorites = favoriteIds,
+                onFavorite = viewModel::toggleFavorite,
+                notice = favoriteError,
             )
         } else {
             CharacterRoster(
@@ -184,6 +189,9 @@ fun BrowseScreen(
                 freshQuery = viewModel::takeFreshQuery,
                 hadItems = viewModel.hadItems(query),
                 onItems = { viewModel.sawItems(query) },
+                favorites = favoriteIds,
+                onFavorite = viewModel::toggleFavorite,
+                notice = favoriteError,
             )
         }
     }
@@ -442,6 +450,10 @@ internal fun CharacterRoster(
     freshQuery: (com.cherry.butler.core.model.BrowseQuery) -> Boolean,
     hadItems: Boolean,
     onItems: () -> Unit,
+    /** Fork: your favourites, once known (null hides the hearts), and the heart's toggle. */
+    favorites: Set<String>? = null,
+    onFavorite: ((String) -> Unit)? = null,
+    notice: String? = null,
 ) {
     val status = PagingStatus(characters)
     StickToTop(gridState, firstKey = if (characters.itemCount > 0) characters.peek(0)?.id else null)
@@ -496,7 +508,15 @@ internal fun CharacterRoster(
                 ) { index ->
                     // A placeholder (a spot not loaded yet) holds its card's shape, so rows keep their height.
                     val character = characters[index]
-                    if (character != null) RosterTile(character, tileWidth) { onCharacterClick(character.id) } else SkeletonTile(tileWidth)
+                    if (character != null) {
+                        RosterTile(
+                            character, tileWidth,
+                            favorite = favorites?.let { character.id in it },
+                            onFavorite = onFavorite?.let { f -> { f(character.id) } },
+                        ) { onCharacterClick(character.id) }
+                    } else {
+                        SkeletonTile(tileWidth)
+                    }
                 }
                 if (status.appending) {
                     items(columns, contentType = { "skeleton" }) { SkeletonTile(tileWidth) }
@@ -508,12 +528,35 @@ internal fun CharacterRoster(
                 }
             }
         }
+        notice?.let { NoticeSlip(it, Modifier.align(Alignment.BottomCenter)) }
     }
 }
 
+/** A short line over the foot of the grid (fork): why a heart didn't stick. */
 @Composable
-private fun RosterTile(character: Character, tileWidth: Dp, onClick: () -> Unit) {
+private fun NoticeSlip(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier
+            .padding(16.dp)
+            .background(ButlerTheme.colors.surfaceHigh, MaterialTheme.shapes.medium)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    )
+}
+
+@Composable
+private fun RosterTile(
+    character: Character,
+    tileWidth: Dp,
+    favorite: Boolean? = null,
+    onFavorite: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     CharacterTile(
+        favorite = favorite,
+        onFavorite = onFavorite,
         name = character.name,
         avatarUrl = character.avatarUrl,
         width = tileWidth,
@@ -547,6 +590,9 @@ internal fun PagedRoster(
     onRetry: () -> Unit,
     onCharacterClick: (String) -> Unit,
     letGo: NestedScrollConnection? = null,
+    favorites: Set<String>? = null,
+    onFavorite: ((String) -> Unit)? = null,
+    notice: String? = null,
 ) {
     val tileWidth = TileGrid.tileWidth()
     LaunchedEffect(page.number, page.loading) { if (!page.loading) gridState.scrollToItem(0) }
@@ -567,7 +613,11 @@ internal fun PagedRoster(
                 verticalArrangement = Arrangement.spacedBy(TileGrid.gap),
             ) {
                 items(page.items, key = { it.id }, contentType = { "character" }) { character ->
-                    RosterTile(character, tileWidth) { onCharacterClick(character.id) }
+                    RosterTile(
+                        character, tileWidth,
+                        favorite = favorites?.let { character.id in it },
+                        onFavorite = onFavorite?.let { f -> { f(character.id) } },
+                    ) { onCharacterClick(character.id) }
                 }
                 item(span = { GridItemSpan(maxLineSpan) }, contentType = "pager") {
                     Row(
@@ -586,6 +636,7 @@ internal fun PagedRoster(
                 }
             }
         }
+        notice?.let { NoticeSlip(it, Modifier.align(Alignment.BottomCenter)) }
     }
 }
 

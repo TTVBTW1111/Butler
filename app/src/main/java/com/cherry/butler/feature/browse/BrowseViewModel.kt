@@ -28,8 +28,10 @@ import com.cherry.butler.core.model.SpecialMode
 import androidx.paging.filter
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.drop
 import javax.inject.Inject
+import com.cherry.butler.ui.components.userMessage
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
@@ -38,7 +40,28 @@ class BrowseViewModel @Inject constructor(
     private val tagRemoteSource: TagRemoteSource,
     private val lastPlace: LastPlace,
     browsePrefs: com.cherry.butler.core.data.BrowsePrefs,
+    private val favorites: com.cherry.butler.core.data.FavoritesRepository,
 ) : ViewModel() {
+
+    /** Fork: your favourites for the hearts on the cards; null until they've been read. */
+    val favoriteIdsOrNull: StateFlow<Set<String>?> = combine(favorites.ids, favorites.known) { ids, known -> if (known) ids else null }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _favoriteError = MutableStateFlow<String?>(null)
+    /** Why a heart didn't stick, for a moment under the grid. */
+    val favoriteError: StateFlow<String?> = _favoriteError.asStateFlow()
+
+    fun toggleFavorite(characterId: String) {
+        val on = !favorites.isFavorite(characterId)
+        viewModelScope.launch {
+            favorites.set(characterId, on).onFailure { e ->
+                val why = e.userMessage()
+                _favoriteError.value = "Not ${if (on) "favourited" else "unfavourited"}. $why".trim()
+                kotlinx.coroutines.delay(5_000)
+                _favoriteError.value = null
+            }
+        }
+    }
 
     /**
      * The grid's scroll state lives here, not in the screen: opening a character takes the
@@ -148,6 +171,7 @@ class BrowseViewModel @Inject constructor(
     val tags: StateFlow<List<TagDto>> = _tags.asStateFlow()
 
     init {
+        viewModelScope.launch { favorites.ensureLoaded() }
         viewModelScope.launch { _query.collect { lastPlace.saveBrowseQuery(it) } }
         // Paged Home: a new query starts over at page 1; the phone-side minimums re-filter in place.
         viewModelScope.launch {

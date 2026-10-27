@@ -57,6 +57,7 @@ class CharacterDetailViewModel @Inject constructor(
     private val personas: PersonaRepository,
     private val community: CommunityRepository,
     private val profiles: com.cherry.butler.core.data.ProfileRepository,
+    private val favorites: com.cherry.butler.core.data.FavoritesRepository,
 ) : ViewModel() {
 
     /** Your own id, to know a character of yours: its page offers Edit instead of Block. */
@@ -85,7 +86,14 @@ class CharacterDetailViewModel @Inject constructor(
         viewModelScope.launch { runCatching { profiles.profile() } }
         loadCommunity()
         viewModelScope.launch {
-            runCatching { community.isFavorite(characterId) }.onSuccess { on -> _state.update { it.copy(favorited = on) } }
+            // Fork: the heart always shows. If Janitor won't say, the list read for the browse
+            // hearts does; failing that it starts empty, and a tap still favourites.
+            runCatching { community.isFavorite(characterId) }
+                .onSuccess { on -> favorites.mark(characterId, on); _state.update { it.copy(favorited = on) } }
+                .onFailure {
+                    runCatching { favorites.ensureLoaded() }
+                    _state.update { it.copy(favorited = favorites.isFavorite(characterId)) }
+                }
             runCatching { community.favoriteCount(characterId) }.onSuccess { n -> _state.update { it.copy(favoriteCount = n) } }
         }
     }
@@ -106,7 +114,7 @@ class CharacterDetailViewModel @Inject constructor(
         val now = _state.value.favorited ?: return
         _state.update { it.copy(favorited = !now, favoriteCount = it.favoriteCount?.let { c -> (c + if (now) -1 else 1).coerceAtLeast(0) }, socialError = null) }
         viewModelScope.launch {
-            runCatching { community.setFavorite(characterId, !now) }.onFailure { e ->
+            runCatching { community.setFavorite(characterId, !now) }.onSuccess { favorites.mark(characterId, !now) }.onFailure { e ->
                 _state.update { it.copy(favorited = now, favoriteCount = it.favoriteCount?.let { c -> (c + if (now) 1 else -1).coerceAtLeast(0) }, socialError = "Not changed. ${e.userMessage()}") }
             }
         }

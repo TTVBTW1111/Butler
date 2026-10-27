@@ -154,6 +154,8 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
             modifier = Modifier.wheelSideways(tagRow).fadeEdges(),
         )
         val paged by viewModel.paged.collectAsStateWithLifecycle()
+        val favoriteIds = viewModel.favoriteIdsOrNull.collectAsStateWithLifecycle().value
+        val favoriteError = viewModel.favoriteError.collectAsStateWithLifecycle().value
         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
         if (paged) {
             val page by viewModel.page.collectAsStateWithLifecycle()
@@ -165,6 +167,9 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
                 onNext = viewModel::nextPage,
                 onRetry = viewModel::retryPage,
                 onCharacterClick = onCharacterClick,
+                favorites = favoriteIds,
+                onFavorite = viewModel::toggleFavorite,
+                notice = favoriteError,
             )
         } else {
             CharacterRoster(
@@ -176,6 +181,9 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
                 freshQuery = viewModel::takeFreshQuery,
                 hadItems = viewModel.hadItems(query),
                 onItems = { viewModel.sawItems(query) },
+                favorites = favoriteIds,
+                onFavorite = viewModel::toggleFavorite,
+                notice = favoriteError,
             )
         }
             // A PC list shows where it is: a thin bar at the edge, brighter under the pointer.
