@@ -17,6 +17,9 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Diamond
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.MaterialTheme
@@ -133,8 +136,10 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
             SortBar(
                 sort = query.sort,
                 special = query.special,
-                onSort = viewModel::onSortSelected,
-                onSpecial = viewModel::onSpecialSelected,
+                onSort = { viewModel.onSourceSelected(BrowseSource.All); viewModel.onSortSelected(it) },
+                onSpecial = { viewModel.onSourceSelected(BrowseSource.All); viewModel.onSpecialSelected(it) },
+                source = query.source,
+                onSource = { picked -> viewModel.onSourceSelected(if (query.source == picked) BrowseSource.All else picked) },
             )
             Spacer(Modifier.width(4.dp))
             FilterKey(active = query.filterCount, onClick = { showFilters = true })
@@ -151,6 +156,7 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
             onRemoveCustom = viewModel::onCustomTagRemoved,
             onAddCustom = viewModel::onCustomTagAdded,
             state = tagRow,
+            showSources = false,
             modifier = Modifier.wheelSideways(tagRow).fadeEdges(),
         )
         val paged by viewModel.paged.collectAsStateWithLifecycle()
@@ -207,8 +213,13 @@ private fun SortBar(
     special: SpecialMode?,
     onSort: (CharacterSort) -> Unit,
     onSpecial: (SpecialMode) -> Unit,
+    source: BrowseSource = BrowseSource.All,
+    onSource: (BrowseSource) -> Unit = {},
 ) {
-    val trending = special == SpecialMode.Trending24 || special == SpecialMode.TrendingWeek
+    // Fork: Favorites and Following sit here, as on the website. While one is on, the sort
+    // and Trending don't apply (the server lists all of them), so they don't look chosen.
+    val all = source == BrowseSource.All
+    val trending = all && (special == SpecialMode.Trending24 || special == SpecialMode.TrendingWeek)
     Row(
         modifier = Modifier
             .border(1.dp, ButlerTheme.colors.rule, MaterialTheme.shapes.medium)
@@ -218,7 +229,7 @@ private fun SortBar(
         DropSegment(
             label = sort.label,
             icon = Icons.Rounded.StarBorder,
-            selected = special == null,
+            selected = all && special == null,
             options = CharacterSort.entries.map { it.label },
             chosen = if (special == null) CharacterSort.entries.indexOf(sort) else -1,
             onPick = { onSort(CharacterSort.entries[it]) },
@@ -236,8 +247,22 @@ private fun SortBar(
         Segment(
             label = SpecialMode.HiddenGems.label,
             icon = Icons.Rounded.Diamond,
-            selected = special == SpecialMode.HiddenGems,
+            selected = all && special == SpecialMode.HiddenGems,
             onClick = { onSpecial(SpecialMode.HiddenGems) },
+            modifier = Modifier.width(IntrinsicSize.Max).padding(horizontal = 4.dp),
+        )
+        Segment(
+            label = "Favorites",
+            icon = if (source == BrowseSource.Favorites) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            selected = source == BrowseSource.Favorites,
+            onClick = { onSource(BrowseSource.Favorites) },
+            modifier = Modifier.width(IntrinsicSize.Max).padding(horizontal = 4.dp),
+        )
+        Segment(
+            label = "Following",
+            icon = Icons.Rounded.Group,
+            selected = source == BrowseSource.Following,
+            onClick = { onSource(BrowseSource.Following) },
             modifier = Modifier.width(IntrinsicSize.Max).padding(horizontal = 4.dp),
         )
     }

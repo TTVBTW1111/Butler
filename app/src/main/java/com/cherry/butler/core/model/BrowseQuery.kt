@@ -37,12 +37,14 @@ data class BrowseQuery(
     /**
      * The part the server sees; the minimums are applied on the phone. A search covers all
      * characters: `special_mode` would narrow it to that day's trending list and find nothing.
+     * Fork: so do Favorites and Following, as on the website; with Trending on (the default)
+     * they showed only the favourites trending that day.
      */
     fun server(): BrowseQuery = copy(
         minMessages = 0,
         minTokens = 0,
         proxyOnly = false,
-        special = if (search.isNullOrBlank()) special else null,
+        special = if (search.isNullOrBlank() && source == BrowseSource.All) special else null,
     )
 
     /** How many filter-sheet settings differ from the defaults (for the filter key's dot). */

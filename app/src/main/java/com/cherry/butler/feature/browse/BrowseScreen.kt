@@ -284,6 +284,8 @@ internal fun TagStrip(
     onAddCustom: (String) -> Unit,
     modifier: Modifier = Modifier,
     state: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    /** Fork: false where Favorites and Following sit in the sort bar instead (the desktop). */
+    showSources: Boolean = true,
 ) {
     androidx.compose.foundation.lazy.LazyRow(
         state = state,
@@ -293,7 +295,7 @@ internal fun TagStrip(
     ) {
         // Your favourites and the creators you follow, where they can be seen (they used to sit in
         // the filter sheet, and people couldn't find them: asked on Reddit, 0.2 thread).
-        item(key = "favorites") {
+        if (showSources) item(key = "favorites") {
             val on = source == BrowseSource.Favorites
             StripChip(
                 text = "Favorites",
@@ -302,7 +304,7 @@ internal fun TagStrip(
                 icon = if (on) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
             )
         }
-        item(key = "following") {
+        if (showSources) item(key = "following") {
             StripChip(text = "Following", selected = source == BrowseSource.Following, onClick = { onSource(BrowseSource.Following) })
         }
         item(key = "pick") {
