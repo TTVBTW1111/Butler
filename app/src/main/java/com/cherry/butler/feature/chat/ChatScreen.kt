@@ -477,6 +477,7 @@ fun ChatScreen(
     var loreOpen by remember { mutableStateOf(false) }
     if (loreOpen) chat?.let { c ->
         PersonaLoreSheet(
+            chatId = c.id,
             characterId = c.characterId,
             personaId = activePersona?.id,
             currentMemory = c.summary,

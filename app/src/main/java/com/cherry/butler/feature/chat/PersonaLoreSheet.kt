@@ -46,9 +46,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Who writes the lore (fork): all of them go the way this chat's replies go, with the whole chat. */
+data class LoreWriter(val label: String, val writer: com.cherry.butler.core.data.Writer)
+
 data class LoreState(
-    val presets: List<ProxyConfig>? = null,
-    val preset: ProxyConfig? = null,
+    val presets: List<LoreWriter>? = null,
+    val preset: LoreWriter? = null,
     val persona: PersonaLore.Persona? = null,
     val characterName: String = "",
     val wishes: String = "",
@@ -68,22 +71,27 @@ class PersonaLoreViewModel @Inject constructor(
     val state: StateFlow<LoreState> = _state.asStateFlow()
     private var character: CharacterDetailDto? = null
     private var personaId: String? = null
+    private var chatId: Long = 0
     private var job: Job? = null
 
-    fun prepare(characterId: String, personaId: String?) {
+    fun prepare(chatId: Long, characterId: String, personaId: String?) {
         this.personaId = personaId
+        this.chatId = chatId
         viewModelScope.launch {
             runCatching {
-                val presets = lore.presets()
+                val proxies = runCatching { lore.presets() }.getOrDefault(emptyList())
+                val writers = listOf(
+                    LoreWriter("Same as this chat", com.cherry.butler.core.data.Writer.SameAsChat),
+                    LoreWriter("JanitorAI (JLLM)", com.cherry.butler.core.data.Writer.Jllm),
+                ) + proxies.map { p -> LoreWriter(p.name.ifBlank { p.model.ifBlank { "Proxy" } }, com.cherry.butler.core.data.Writer.Proxy(p.clientId ?: p.id)) }
                 val c = lore.character(characterId).also { character = it }
                 val p = lore.persona(personaId)
                 _state.update {
                     it.copy(
-                        presets = presets,
-                        preset = presets.firstOrNull { pr -> pr.id == lore.lastPreset } ?: presets.firstOrNull(),
+                        presets = writers,
+                        preset = writers.first(),
                         persona = p,
                         characterName = c.chatName?.takeIf { n -> n.isNotBlank() } ?: c.name,
-                        error = if (presets.isEmpty()) "The lore builder writes through one of your proxies, and none has a key saved." else null,
                     )
                 }
             }.onFailure { e -> _state.update { it.copy(error = e.userMessage(), presets = it.presets ?: emptyList()) } }
@@ -94,15 +102,17 @@ class PersonaLoreViewModel @Inject constructor(
 
     fun write() {
         val s = _state.value
-        val c = character ?: return
+        if (character == null) return
         val persona = s.persona ?: return
         val preset = s.preset ?: return
         job?.cancel()
-        lore.lastPreset = preset.id
         job = viewModelScope.launch {
             _state.update { it.copy(text = "", writing = true, error = null, done = null) }
             val out = StringBuilder()
-            runCatching { lore.write(persona, c, s.wishes, preset).collect { piece -> out.append(piece); _state.update { it.copy(text = out.toString().trimStart()) } } }
+            runCatching {
+                lore.writeFromChat(chatId, persona.name, s.characterName, s.wishes, preset.writer)
+                    .collect { piece -> out.append(piece); _state.update { it.copy(text = out.toString().trimStart()) } }
+            }
                 .onFailure { e -> if (e !is kotlinx.coroutines.CancellationException) _state.update { it.copy(error = e.userMessage()) } }
             _state.update { it.copy(writing = false) }
         }
@@ -135,6 +145,7 @@ class PersonaLoreViewModel @Inject constructor(
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun PersonaLoreSheet(
+    chatId: Long,
     characterId: String,
     personaId: String?,
     currentMemory: String?,
@@ -143,7 +154,7 @@ fun PersonaLoreSheet(
     viewModel: PersonaLoreViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(characterId, personaId) { viewModel.prepare(characterId, personaId) }
+    LaunchedEffect(chatId, characterId, personaId) { viewModel.prepare(chatId, characterId, personaId) }
     var presetMenu by remember { mutableStateOf(false) }
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = { viewModel.stop(); onDismiss() },
@@ -167,7 +178,7 @@ fun PersonaLoreSheet(
                 value = state.wishes,
                 onValueChange = { v -> viewModel.update { it.copy(wishes = v) } },
                 label = { Text("What you want (optional)") },
-                placeholder = { Text("We're old sparring partners; I still owe her a rematch…") },
+                placeholder = { Text("Leave empty to work it out from the story so far. Or: we're old sparring partners…") },
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.writing,
@@ -176,12 +187,12 @@ fun PersonaLoreSheet(
                 Text("Written by", style = MaterialTheme.typography.labelLarge, color = ButlerTheme.colors.textMed)
                 androidx.compose.foundation.layout.Box {
                     TextButton(onClick = { presetMenu = true }, enabled = !state.presets.isNullOrEmpty() && !state.writing) {
-                        Text(state.preset?.let { it.name.ifBlank { it.model } } ?: "—")
+                        Text(state.preset?.label ?: "—")
                     }
                     DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
                         state.presets.orEmpty().forEach { p ->
                             DropdownMenuItem(
-                                text = { Text(p.name.ifBlank { "Proxy" } + if (p.model.isNotBlank()) "  ·  ${p.model}" else "") },
+                                text = { Text(p.label) },
                                 onClick = { presetMenu = false; viewModel.update { it.copy(preset = p) } },
                             )
                         }
@@ -193,7 +204,11 @@ fun PersonaLoreSheet(
                     KeyButton(label = "Stop", onClick = viewModel::stop)
                 } else {
                     KeyButton(
-                        label = if (state.text.isBlank()) "Write it" else "Write again",
+                        label = when {
+                            state.text.isNotBlank() -> "Write again"
+                            state.wishes.isBlank() -> "Write it from the story"
+                            else -> "Write it"
+                        },
                         onClick = viewModel::write,
                         enabled = state.persona != null && state.preset != null,
                         primary = true,
