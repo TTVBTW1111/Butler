@@ -130,9 +130,17 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
                 onValueChange = { if (it.isEmpty()) viewModel.onClearSearch() else viewModel.onSearchChanged(it) },
                 placeholder = "Search characters",
                 onSubmit = { focusManager.clearFocus() },
-                modifier = Modifier.widthIn(min = 180.dp, max = 420.dp).weight(1f, fill = false),
+                modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.weight(1f).widthIn(min = 16.dp))
+            Spacer(Modifier.width(8.dp))
+            FilterKey(active = query.filterCount, onClick = { showFilters = true })
+        }
+        // Fork: the sort gets its own line. With Favorites and Following beside it, one line
+        // left the search box a sliver in a four-card column.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             SortBar(
                 sort = query.sort,
                 special = query.special,
@@ -141,8 +149,6 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
                 source = query.source,
                 onSource = { picked -> viewModel.onSourceSelected(if (query.source == picked) BrowseSource.All else picked) },
             )
-            Spacer(Modifier.width(4.dp))
-            FilterKey(active = query.filterCount, onClick = { showFilters = true })
         }
         val tagRow = rememberLazyListState()
         TagStrip(
