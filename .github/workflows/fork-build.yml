@@ -23,7 +23,16 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - name: Compile the desktop app and run the shared unit tests
-        run: ./gradlew --no-configuration-cache :desktop:compileKotlin :app:testDebugUnitTest --tests "com.cherry.butler.fork.*"
+        run: |
+          set -o pipefail
+          ./gradlew --no-configuration-cache :desktop:compileKotlin :app:testDebugUnitTest --tests "com.cherry.butler.fork.*" 2>&1 | tee build.log
+      # Compiler errors and failed tests as annotations, readable from the run's page and the API.
+      - name: Report errors
+        if: failure()
+        run: |
+          grep -E "^e: |error:|FAILED|AssertionError|Expected|What went wrong" -A2 build.log | head -60 | while IFS= read -r line; do
+            echo "::error::${line//%/%25}"
+          done
 
   windows:
     needs: compile
