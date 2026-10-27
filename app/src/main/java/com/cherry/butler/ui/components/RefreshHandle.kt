@@ -57,3 +57,18 @@ fun RegisterArchive(action: () -> Unit) {
         onDispose { handle.withdraw(registered) }
     }
 }
+
+/** Search in the open chat, opened from a keyboard shortcut (Ctrl+F on the desktop). */
+val LocalFindHandle = staticCompositionLocalOf<RefreshHandle?> { null }
+
+/** Offers [action] as the screen's find while it is composed. */
+@Composable
+fun RegisterFind(action: () -> Unit) {
+    val handle = LocalFindHandle.current ?: return
+    val latest = rememberUpdatedState(action)
+    DisposableEffect(handle) {
+        val registered: () -> Unit = { latest.value() }
+        handle.offer(registered)
+        onDispose { handle.withdraw(registered) }
+    }
+}

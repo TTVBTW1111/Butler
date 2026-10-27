@@ -232,6 +232,7 @@ fun DesktopShell() {
         LocalChatLight provides chatLight,
         com.cherry.butler.ui.components.LocalBackdropHost provides remember { com.cherry.butler.ui.components.BackdropHost() },
         com.cherry.butler.ui.components.LocalRefreshHandle provides com.cherry.butler.desktop.DesktopKeys.screen,
+        com.cherry.butler.ui.components.LocalFindHandle provides com.cherry.butler.desktop.DesktopKeys.chatFind,
     ) {
         Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize().background(ButlerTheme.colors.chrome)) {

@@ -67,6 +67,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.withFrameNanos
 import com.cherry.butler.core.design.proseStyle
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -179,6 +180,46 @@ fun ChatScreen(
     val compacting = memoryRun?.kind == MemoryService.Kind.Compact
     // A compact shows at the foot of the log while it runs, and stays there if it failed.
     val compactShown = memoryRun?.takeIf { compacting && !it.done }
+
+    // Search in this chat (fork): the button in the bar, or Ctrl+F on the desktop.
+    var searching by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var hitAt by remember { mutableStateOf(-1) }
+    var jumpTick by remember { mutableStateOf(0) }
+    val searchFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val searchTurns = remember(transcript, jobs, live.keys) { foldTurns(transcript, jobs, live.keys) }
+    val searchTerms = remember(searchQuery) { ChatSearch.terms(searchQuery) }
+    val hits = remember(searchTurns, searchTerms) { ChatSearch.hits(searchTurns, searchTerms) }
+    val closeSearch: () -> Unit = {
+        searching = false
+        searchQuery = ""
+        hitAt = -1
+    }
+    val stepSearch: (Int) -> Unit = { by ->
+        hitAt = ChatSearch.step(hitAt, by, hits.size)
+        if (hitAt >= 0) jumpTick += 1
+    }
+    // A new query starts at the newest match, once the typing pauses.
+    LaunchedEffect(searchTerms) {
+        kotlinx.coroutines.delay(180)
+        hitAt = hits.lastIndex
+        if (hitAt >= 0) jumpTick += 1
+    }
+    LaunchedEffect(searching) {
+        // The row is laid out in the bar a frame later; then the caret can go in.
+        if (searching) { kotlinx.coroutines.delay(60); runCatching { searchFocus.requestFocus() } }
+    }
+    com.cherry.butler.ui.components.RegisterFind {
+        if (searching) {
+            runCatching { searchFocus.requestFocus() }
+        } else {
+            searching = true
+        }
+        Unit
+    }
+    androidx.activity.compose.BackHandler(enabled = searching) { closeSearch() }
+    val searchStroke = ButlerTheme.colors.warn.copy(alpha = 0.42f)
+    val searchMarks = if (searching && searchTerms.isNotEmpty()) com.cherry.butler.core.design.SearchMarks(searchTerms, searchStroke) else null
 
     LifecycleResumeEffect(viewModel) {
         viewModel.onShown()
@@ -488,6 +529,9 @@ fun ChatScreen(
                             color = if (busy || summarizing) MaterialTheme.colorScheme.primary else ButlerTheme.colors.textLow,
                         )
                     }
+                    IconButton(onClick = { if (searching) closeSearch() else searching = true }) {
+                        Icon(Icons.Rounded.Search, contentDescription = "Search this chat", tint = if (searching) MaterialTheme.colorScheme.primary else ButlerTheme.colors.textMed)
+                    }
                     providerLabel?.let { label ->
                         ProviderChip(label = label, percent = contextPercent, onClick = { viewModel.openModels(); modelsOpen = true })
                     }
@@ -503,6 +547,18 @@ fun ChatScreen(
                         onBackground = { backgroundOpen = true },
                         richOn = richOn,
                         onRich = { viewModel.setRich(!richOn) },
+                    )
+                }
+                if (searching) {
+                    ChatSearchBar(
+                        query = searchQuery,
+                        onQuery = { searchQuery = it },
+                        position = hitAt,
+                        total = hits.size,
+                        onOlder = { stepSearch(-1) },
+                        onNewer = { stepSearch(1) },
+                        onClose = closeSearch,
+                        focusRequester = searchFocus,
                     )
                 }
                 // No progress bar: the caption says what is happening, the reply shows it.
@@ -545,7 +601,12 @@ fun ChatScreen(
                     onRetry = viewModel::refresh,
                     modifier = Modifier.padding(16.dp),
                 )
-                else -> androidx.compose.runtime.CompositionLocalProvider(com.cherry.butler.core.design.LocalButterTint provides butterTint) { Transcript(
+                else -> androidx.compose.runtime.CompositionLocalProvider(
+                    com.cherry.butler.core.design.LocalButterTint provides butterTint,
+                    com.cherry.butler.core.design.LocalSearchMarks provides searchMarks,
+                ) { Transcript(
+                    jumpTo = hits.getOrNull(hitAt)?.let { searchTurns.getOrNull(it)?.key },
+                    jumpTick = jumpTick,
                     messages = transcript,
                     jobs = jobs,
                     live = live,
@@ -713,6 +774,9 @@ private fun Transcript(
     showScene: Boolean = true,
     /** A compact running, or one that failed, shown at the foot of the log. */
     compact: MemoryService.Run? = null,
+    /** Search (fork): the turn to bring into view, again each time [jumpTick] moves. */
+    jumpTo: String? = null,
+    jumpTick: Int = 0,
 ) {
     val listState = rememberFlingListState(ahead = 2)
     val jobByUser = remember(jobs) { jobs.filter { it.userMessageLocalId != null }.associateBy { it.userMessageLocalId!! } }
@@ -739,6 +803,15 @@ private fun Transcript(
         // The reply to a line you just sent is part of the same act: still follow it.
         val replyToYourLine = newest.isBot && newest.serverId == null && beforeNewest?.isBot == false
         if (!newest.isBot || replyToYourLine || atBottom) listState.scrollToItem(0)
+    }
+
+    // Search: the list is reversed, the foot (and a compact row, if any) first.
+    LaunchedEffect(jumpTick) {
+        val key = jumpTo ?: return@LaunchedEffect
+        val at = turns.indexOfFirst { it.key == key }
+        if (at < 0) return@LaunchedEffect
+        val item = (if (compact != null) 1 else 0) + (turns.lastIndex - at)
+        listState.animateScrollToItem(item)
     }
 
     val absorber = remember(listState) { GrowthAbsorber(listState) }

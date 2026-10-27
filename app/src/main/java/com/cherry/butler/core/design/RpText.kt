@@ -89,6 +89,32 @@ fun rememberRpStyles(baseColor: Color): RpStyles {
     }
 }
 
+/**
+ * What chat search is looking for. While it is set, every term is stroked wherever it shows,
+ * with the same highlighter the scene tags use, so a match reads as part of Butler's page.
+ */
+@Immutable
+data class SearchMarks(val terms: List<String>, val color: Color)
+
+val LocalSearchMarks = androidx.compose.runtime.compositionLocalOf<SearchMarks?> { null }
+
+/** The strokes for [search]'s terms in [text], case aside. */
+internal fun searchStrokes(text: String, search: SearchMarks?): List<Triple<Int, Int, Color>> {
+    if (search == null || search.terms.isEmpty()) return emptyList()
+    val out = ArrayList<Triple<Int, Int, Color>>()
+    for (term in search.terms) {
+        if (term.isEmpty()) continue
+        var from = 0
+        while (from < text.length) {
+            val at = text.indexOf(term, from, ignoreCase = true)
+            if (at < 0) break
+            out += Triple(at, at + term.length, search.color)
+            from = at + term.length
+        }
+    }
+    return out
+}
+
 /** How strong a highlighter stroke is: "ever slightly", but a clear shape. */
 private const val MARK_ALPHA = 0.22f
 
@@ -118,6 +144,7 @@ fun RpText(
     val styles = rememberRpStyles(color)
     val keepQuotes = LocalRpLook.current.showQuotes
     val blocks = remember(text, keepQuotes, images) { RpMarkdown.parseShared(text, keepQuotes, images) }
+    val search = LocalSearchMarks.current
     @Suppress("NAME_SHADOWING") val color = narrationInk(color)
 
     if (maxLines != Int.MAX_VALUE) {
@@ -139,7 +166,7 @@ fun RpText(
             when (block) {
                 is Block.Paragraph -> MarkedText(
                     text = remember(block, styles) { block.toAnnotated(styles) },
-                    marks = remember(block, styles) { block.spans.mapNotNull { s -> styles.marks[s.kind]?.let { Triple(s.start, s.end, it) } } },
+                    marks = remember(block, styles, search) { block.spans.mapNotNull { s -> styles.marks[s.kind]?.let { Triple(s.start, s.end, it) } } + searchStrokes(block.text, search) },
                     style = style,
                     color = color,
                 )
@@ -152,7 +179,7 @@ fun RpText(
                     )
                     MarkedText(
                         text = remember(block, styles) { block.toAnnotated(styles) },
-                        marks = remember(block, styles) { block.spans.mapNotNull { s -> styles.marks[s.kind]?.let { Triple(s.start, s.end, it) } } },
+                        marks = remember(block, styles, search) { block.spans.mapNotNull { s -> styles.marks[s.kind]?.let { Triple(s.start, s.end, it) } } + searchStrokes(block.text, search) },
                         style = style,
                         color = color,
                     )

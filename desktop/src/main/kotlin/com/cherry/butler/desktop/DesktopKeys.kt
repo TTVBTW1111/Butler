@@ -10,6 +10,9 @@ object DesktopKeys {
     /** The Chats archive's toggle, registered by the list itself. */
     val chatsArchive = RefreshHandle()
 
+    /** Ctrl+F: search in the open chat, registered by the chat screen while it is shown. */
+    val chatFind = RefreshHandle()
+
     /** Set by the shell: Ctrl+H, the Chats archive opened (from any section) or closed. */
     @Volatile var archive: (() -> Boolean)? = null
 

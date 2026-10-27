@@ -128,6 +128,9 @@ fun main(args: Array<String>) {
                     e.type != KeyEventType.KeyDown -> false
                     e.key == Key.Escape -> DesktopBack.press()
                     e.key == Key.F && e.isCtrlPressed && e.isShiftPressed -> { FrameLog.toggle(); true }
+                    // Ctrl+F: search in the open chat.
+                    e.key == Key.F && e.isCtrlPressed && !e.isShiftPressed ->
+                        DesktopKeys.chatFind.action?.let { it(); true } ?: false
                     // Ctrl+H: the Chats archive, which the phone opens with a short pull.
                     e.key == Key.H && e.isCtrlPressed && !e.isShiftPressed -> DesktopKeys.archive?.invoke() ?: false
                     // Ctrl+R or F5: refresh what's on show, as a pull does on the phone.
