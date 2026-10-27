@@ -119,11 +119,13 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
     }
     PaneSize(column, maxHeight, Modifier.align(Alignment.TopCenter).width(column)) {
     Column(Modifier.fillMaxSize()) {
+        val forYou by viewModel.forYou.collectAsStateWithLifecycle()
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, top = 16.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Browse", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+            com.cherry.butler.feature.foryou.BrowseForYouSwitch(forYou = forYou, onPick = viewModel::setForYou)
+            if (!forYou) {
             Spacer(Modifier.width(24.dp))
             SearchBox(
                 value = searchInput,
@@ -134,7 +136,11 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
             )
             Spacer(Modifier.width(8.dp))
             FilterKey(active = query.filterCount, onClick = { showFilters = true })
+            }
         }
+        if (forYou) {
+            com.cherry.butler.feature.foryou.ForYouFeed(onOpenCharacter = onCharacterClick, modifier = Modifier.fillMaxSize())
+        } else {
         // Fork: the sort gets its own line. With Favorites and Following beside it, one line
         // left the search box a sliver in a four-card column.
         Row(
@@ -203,6 +209,7 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
                 adapter = androidx.compose.foundation.rememberScrollbarAdapter(viewModel.gridState),
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(vertical = 6.dp, horizontal = 2.dp),
             )
+        }
         }
     }
     }

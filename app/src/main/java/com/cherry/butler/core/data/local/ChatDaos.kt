@@ -127,6 +127,10 @@ interface ChatDao {
     @Query("SELECT id, characterId, folderIds, lastMessageAt FROM chats")
     suspend fun allFolderIds(): List<ChatCharacterFolders>
 
+    /** Fork (For you): how much you've chatted with each character, and as which persona. */
+    @Query("SELECT characterId, MAX(characterName) AS characterName, SUM(messageCount) AS messages, MAX(lastMessageAt) AS lastAt, personaId FROM chats GROUP BY characterId, personaId")
+    suspend fun activityByCharacter(): List<CharacterActivity>
+
     /** The same, live: every change to a chat's folders (a sync, a move) emits. */
     @Query("SELECT id, characterId, folderIds, lastMessageAt FROM chats")
     fun observeAllFolderIds(): Flow<List<ChatCharacterFolders>>
@@ -307,6 +311,9 @@ interface SendJobDao {
 data class ChatFolders(val id: Long, val folderIds: String)
 
 data class ChatCharacterFolders(val id: Long, val characterId: String, val folderIds: String, val lastMessageAt: Long?)
+
+/** Fork (For you): one character's chats, summed per persona. */
+data class CharacterActivity(val characterId: String, val characterName: String, val messages: Int, val lastAt: Long?, val personaId: String?)
 
 @Dao
 interface GroupMarkDao {

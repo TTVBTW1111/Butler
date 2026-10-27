@@ -287,7 +287,7 @@ private fun CommentAuthorDto?.toAuthor() = CommentAuthor(
     verified = this?.isVerified == true,
 )
 
-private fun CharacterDto.toCharacter(): Character {
+internal fun CharacterDto.toCharacter(): Character {
     val desc = shownDescription
     return Character(
         id = id, name = name, avatar = avatar,

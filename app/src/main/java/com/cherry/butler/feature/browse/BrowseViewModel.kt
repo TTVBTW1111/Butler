@@ -47,6 +47,11 @@ class BrowseViewModel @Inject constructor(
     val favoriteIdsOrNull: StateFlow<Set<String>?> = combine(favorites.ids, favorites.known) { ids, known -> if (known) ids else null }
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), null)
 
+    private val _forYou = MutableStateFlow(false)
+    /** Fork: whether the page shows the For you feed instead of the grid. */
+    val forYou: StateFlow<Boolean> = _forYou.asStateFlow()
+    fun setForYou(on: Boolean) { _forYou.value = on }
+
     private val _favoriteError = MutableStateFlow<String?>(null)
     /** Why a heart didn't stick, for a moment under the grid. */
     val favoriteError: StateFlow<String?> = _favoriteError.asStateFlow()
