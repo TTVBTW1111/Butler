@@ -127,6 +127,11 @@ class SettingsRepository @Inject constructor(
         if (draft.id == null) remote.createProxy(body) else remote.patchProxy(draft.id, body)
     }
 
+    /** Fork: links a library prompt to a proxy (an edition per model), or unlinks it with null. */
+    suspend fun linkPrompt(proxyId: String, promptId: String?) = write {
+        remote.patchProxy(proxyId, buildJsonObject { put("prompt_id", promptId) })
+    }
+
     suspend fun deleteProxy(id: String) = write {
         val ids = _settings.value?.proxies?.firstOrNull { it.id == id }?.ids ?: listOf(id)
         remote.deleteProxy(id)

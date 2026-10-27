@@ -146,7 +146,9 @@ fun ModelSheet(
                 val preset = presetFor(proxy.id)
                 ChoiceRow(
                     title = proxy.name.ifBlank { "Proxy" },
-                    subtitle = if (preset.isNotBlank()) "$preset · ${proxy.model}" else proxy.model.ifBlank { proxy.apiUrl },
+                    // Fork: the prompt (edition) this model carries, so a switch shows what changes.
+                    subtitle = (if (preset.isNotBlank()) "$preset · ${proxy.model}" else proxy.model.ifBlank { proxy.apiUrl }) +
+                        "  ·  " + (proxy.promptId?.let { id -> settings?.prompts?.firstOrNull { it.id == id }?.name } ?: proxy.promptName ?: "no prompt"),
                     selected = proxyOn && settings.selectedProxyId == proxy.id,
                     onClick = { onSelectProxy(proxy.id) },
                     busy = busy,
