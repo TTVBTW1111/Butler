@@ -70,25 +70,32 @@ class DescriptionWriter @Inject constructor(
         set(value) { prefs.edit().putString(KEY_LAST, value).apply() }
 
     /** The enhanced description, as it streams in. */
-    fun enhance(description: String, name: String, pronouns: String?, preset: ProxyConfig): Flow<String> = flow {
+    fun enhance(description: String, name: String, pronouns: String?, preset: ProxyConfig): Flow<String> = write(
+        system = INSTRUCTION,
+        user = buildString {
+            if (name.isNotBlank()) append("Name: ").append(name.trim()).append('\n')
+            if (!pronouns.isNullOrBlank()) append("Pronouns: ").append(pronouns).append('\n')
+            append("\nDescription:\n").append(description.trim())
+        },
+        preset = preset,
+    )
+
+    /**
+     * Fork: one instruction and one message through the preset, streamed, reasoning left out.
+     * The enhancer above and the persona lore builder both write through this.
+     */
+    fun write(system: String, user: String, preset: ProxyConfig, maxTokens: Int = 700, temperature: Double = 0.8): Flow<String> = flow {
         val profile = profiles.profile()
         val proxy = profiles.proxy(profile, preset.clientId ?: preset.id)
             ?: throw ApiError.Api(0, janitorCode = "NO_PRESET", serverMessage = "That preset isn't saved any more.", retryable = false)
         var payload = buildJsonObject {
             put("model", proxy.model ?: preset.model)
             put("stream", true)
-            put("temperature", 0.8)
-            put("max_tokens", 700)
+            put("temperature", temperature)
+            put("max_tokens", maxTokens)
             put("messages", buildJsonArray {
-                add(buildJsonObject { put("role", "system"); put("content", INSTRUCTION) })
-                add(buildJsonObject {
-                    put("role", "user")
-                    put("content", buildString {
-                        if (name.isNotBlank()) append("Name: ").append(name.trim()).append('\n')
-                        if (!pronouns.isNullOrBlank()) append("Pronouns: ").append(pronouns).append('\n')
-                        append("\nDescription:\n").append(description.trim())
-                    })
-                })
+                add(buildJsonObject { put("role", "system"); put("content", system) })
+                add(buildJsonObject { put("role", "user"); put("content", user) })
             })
         }
         if (OpenRouterOptions.isOpenRouter(proxy.url)) payload = openRouter.get(preset.id).applyTo(payload)

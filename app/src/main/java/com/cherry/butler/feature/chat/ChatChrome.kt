@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Checkroom
+import androidx.compose.material.icons.outlined.HistoryEdu
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.outlined.FileDownload
@@ -62,6 +63,8 @@ fun ChatMenu(
     onRich: () -> Unit = {},
     /** Fork: the persona's outfits, when it has any. */
     onOutfit: (() -> Unit)? = null,
+    /** Fork: the persona lore builder. */
+    onLore: (() -> Unit)? = null,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -79,6 +82,7 @@ fun ChatMenu(
             MenuItem(Icons.Outlined.Palette, "Customize text") { open = false; onCustomize() }
             MenuItem(Icons.Outlined.Wallpaper, "Background") { open = false; onBackground() }
             onOutfit?.let { go -> MenuItem(Icons.Outlined.Checkroom, "Outfit") { open = false; go() } }
+            onLore?.let { go -> MenuItem(Icons.Outlined.HistoryEdu, "Persona lore") { open = false; go() } }
             DropdownMenuItem(
                 text = { Text("Rich typing", style = MaterialTheme.typography.titleSmall) },
                 leadingIcon = { Icon(Icons.Outlined.FormatBold, contentDescription = null, tint = ButlerTheme.colors.textMed, modifier = Modifier.size(20.dp)) },

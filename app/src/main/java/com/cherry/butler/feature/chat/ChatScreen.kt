@@ -474,6 +474,17 @@ fun ChatScreen(
         )
     }
 
+    var loreOpen by remember { mutableStateOf(false) }
+    if (loreOpen) chat?.let { c ->
+        PersonaLoreSheet(
+            characterId = c.characterId,
+            personaId = activePersona?.id,
+            currentMemory = c.summary,
+            onAddToMemory = viewModel::saveSummary,
+            onDismiss = { loreOpen = false },
+        )
+    }
+
     if (backgroundOpen) {
         com.cherry.butler.feature.settings.BackgroundsSheet(chatId = viewModel.chatId, onDismiss = { backgroundOpen = false })
     }
@@ -563,6 +574,7 @@ fun ChatScreen(
                         richOn = richOn,
                         onRich = { viewModel.setRich(!richOn) },
                         onOutfit = if (wardrobe.outfits.isNotEmpty()) ({ outfitOpen = true }) else null,
+                        onLore = if (chat != null) ({ loreOpen = true }) else null,
                     )
                 }
                 if (searching) {
