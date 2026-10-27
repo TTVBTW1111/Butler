@@ -162,7 +162,7 @@ class ForYouRepository @Inject constructor(
     fun markSeen(characterId: String) {
         val now = System.currentTimeMillis()
         val keep = seen().filterValues { now - it < SEEN_FOR } + (characterId to now)
-        prefs.edit().putString(KEY_SEEN, keep.entries.takeLast(2_000).joinToString(";") { "${it.key}=${it.value}" }).apply()
+        prefs.edit().putString(KEY_SEEN, keep.entries.toList().takeLast(2_000).joinToString(";") { "${it.key}=${it.value}" }).apply()
     }
 
     fun notForMe(pick: ForYouPick) {
