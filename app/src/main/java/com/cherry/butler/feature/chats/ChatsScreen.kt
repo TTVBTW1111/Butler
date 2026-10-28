@@ -3,6 +3,8 @@ package com.cherry.butler.feature.chats
 import com.cherry.butler.ui.components.SearchBox
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.CheckBoxOutlineBlank
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.offset
@@ -96,6 +98,13 @@ fun ChatsScreen(
     viewModel: ChatsViewModel = hiltViewModel(),
 ) {
     val allGroups = viewModel.groups.collectAsLazyPagingItems()
+    val filteredAll = viewModel.filteredAll.collectAsLazyPagingItems()
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val view by viewModel.view.collectAsStateWithLifecycle()
+    val selecting by viewModel.selecting.collectAsStateWithLifecycle()
+    val selected by viewModel.selected.collectAsStateWithLifecycle()
+    val bulkFolders by viewModel.bulkFolders.collectAsStateWithLifecycle()
+    val confirmDelete by viewModel.confirmDelete.collectAsStateWithLifecycle()
     val searchResults = viewModel.searchResults.collectAsLazyPagingItems()
     val tabGroups = viewModel.tabGroups.collectAsLazyPagingItems()
     val search by viewModel.search.collectAsStateWithLifecycle()
@@ -106,8 +115,10 @@ fun ChatsScreen(
     val groups = when {
         searching -> searchResults
         tab != ChatsTab.All -> tabGroups
+        filter.active -> filteredAll
         else -> allGroups
     }
+    androidx.activity.compose.BackHandler(enabled = selecting) { viewModel.stopSelecting() }
     // A keyboard's refresh (the desktop's Ctrl+R) does what a pull does.
     com.cherry.butler.ui.components.RegisterRefresh { groups.refresh() }
     com.cherry.butler.ui.components.RegisterArchive {
@@ -144,6 +155,24 @@ fun ChatsScreen(
                 onDismiss = viewModel::stopActing,
             )
         }
+    }
+    if (bulkFolders) {
+        FolderPickerSheet(
+            folders = folders,
+            inFolders = emptySet(),
+            busy = organizeBusy,
+            onToggle = viewModel::bulkIntoFolder,
+            onCreate = viewModel::bulkIntoNewFolder,
+            onDismiss = viewModel::closeBulkFolders,
+        )
+    }
+    if (confirmDelete) {
+        DeleteChatsDialog(
+            count = selected.size,
+            chats = selected.values.sumOf { it.chatCount },
+            onConfirm = viewModel::bulkDelete,
+            onDismiss = viewModel::cancelDelete,
+        )
     }
     managing?.let { f ->
         FolderManageSheet(
@@ -232,6 +261,34 @@ fun ChatsScreen(
             onStartFilter = viewModel::startPersonaFilter,
             onPick = viewModel::pickPersona,
         )
+        // Fork: every sort, filter and tool in sight, not behind a long-press or a shortcut.
+        if (selecting) {
+            SelectionBar(
+                count = selected.size,
+                allPinned = selected.isNotEmpty() && selected.values.all { it.pinned },
+                inArchive = tab == ChatsTab.Archived,
+                onPin = viewModel::bulkPin,
+                onArchive = viewModel::bulkArchive,
+                onFolder = viewModel::openBulkFolders,
+                onDelete = viewModel::askDelete,
+                onDone = viewModel::stopSelecting,
+            )
+        } else {
+            ChatsToolbar(
+                filter = filter,
+                view = view,
+                searching = searching,
+                archivedCount = archivedCount,
+                inArchive = tab == ChatsTab.Archived,
+                personas = personaOptions,
+                onFilter = viewModel::updateFilter,
+                onPersona = viewModel::filterPersona,
+                onClear = viewModel::clearFilters,
+                onView = viewModel::setView,
+                onArchive = { viewModel.selectTab(if (tab == ChatsTab.Archived) ChatsTab.All else ChatsTab.Archived) },
+                onSelect = { viewModel.startSelecting() },
+            )
+        }
         when {
             searching -> {}
             tab == ChatsTab.Archived -> ArchiveHeader(archivedCount, onBack = { viewModel.selectTab(ChatsTab.All) })
@@ -272,8 +329,17 @@ fun ChatsScreen(
                 status.empty && search.isNotBlank() -> CenteredMessage(
                     icon = Icons.Rounded.SearchOff,
                     title = "No chats with \"${search.trim()}\"",
-                    body = "No character you've talked to has that in their name.",
+                    body = if (filter.inMessages) "Nothing you've talked to matches that, in names or in messages kept on this device."
+                        else "No character you've talked to has that in their name. Turn on \"Search messages too\" to look inside chats.",
                 )
+                status.empty && filter.active -> CenteredMessage(
+                    icon = Icons.Rounded.SearchOff,
+                    title = "No chats match these filters",
+                    body = "Loosen a filter, or clear them all.",
+                ) {
+                    Spacer(Modifier.height(16.dp))
+                    KeyButton(label = "Clear filters", onClick = viewModel::clearFilters)
+                }
                 status.empty && tab is ChatsTab.Folder -> CenteredMessage(
                     icon = Icons.Outlined.ChatBubbleOutline,
                     title = "Nothing in this folder",
@@ -292,7 +358,19 @@ fun ChatsScreen(
                     Spacer(Modifier.height(16.dp))
                     KeyButton(label = "Browse characters", onClick = onBrowse)
                 }
+                view == com.cherry.butler.core.model.ChatsView.Cards -> ChatCards(
+                    groups = groups,
+                    fallbackPersonaName = fallbackPersona,
+                    selecting = selecting,
+                    selected = selected.keys,
+                    onOpen = viewModel::open,
+                    onToggle = viewModel::toggleSelected,
+                    onMore = viewModel::actOn,
+                )
                 else -> SlotList(
+                    selecting = selecting,
+                    selected = selected.keys,
+                    onToggle = viewModel::toggleSelected,
                     groups = groups,
                     status = status,
                     listState = when {
@@ -303,6 +381,7 @@ fun ChatsScreen(
                     fallbackPersonaName = fallbackPersona,
                     onOpen = viewModel::open,
                     onLongPress = viewModel::actOn,
+                    onSelectFrom = viewModel::startSelecting,
                     archivedCount = archivedCount,
                     showArchive = !searching && tab == ChatsTab.All,
                     onOpenArchive = { viewModel.selectTab(ChatsTab.Archived) },
@@ -367,6 +446,10 @@ private fun SlotList(
     fallbackPersonaName: String?,
     onOpen: (ChatGroup) -> Unit,
     onLongPress: (ChatGroup) -> Unit,
+    selecting: Boolean = false,
+    selected: Set<String> = emptySet(),
+    onToggle: (ChatGroup) -> Unit = {},
+    onSelectFrom: (ChatGroup) -> Unit = {},
     archivedCount: Int = 0,
     onOpenArchive: () -> Unit = {},
     showArchive: Boolean = false,
@@ -397,7 +480,26 @@ private fun SlotList(
             contentType = { "group" },
         ) { index ->
             groups[index]?.let { group ->
-                SlotLine(group = group, fallbackPersonaName = fallbackPersonaName, onClick = { onOpen(group) }, onLongClick = { onLongPress(group) })
+                val on = group.characterId in selected
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (selecting) {
+                        androidx.compose.material3.Checkbox(
+                            checked = on,
+                            onCheckedChange = { onToggle(group) },
+                            modifier = Modifier.padding(start = 6.dp),
+                        )
+                    }
+                    Box(Modifier.weight(1f)) {
+                        SlotLine(
+                            group = group,
+                            fallbackPersonaName = fallbackPersonaName,
+                            onClick = { if (selecting) onToggle(group) else onOpen(group) },
+                            onLongClick = { if (selecting) onToggle(group) else onLongPress(group) },
+                            onMore = if (selecting) null else ({ onLongPress(group) }),
+                            onSelect = if (selecting) null else ({ onSelectFrom(group) }),
+                        )
+                    }
+                }
             }
         }
         if (status.appending) {
@@ -415,14 +517,36 @@ private fun SlotList(
 }
 
 @Composable
-private fun SlotLine(group: ChatGroup, fallbackPersonaName: String?, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun SlotLine(
+    group: ChatGroup,
+    fallbackPersonaName: String?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onMore: (() -> Unit)? = null,
+    onSelect: (() -> Unit)? = null,
+) {
     RosterRow(
         name = group.characterName.ifBlank { "Character" },
         avatarUrl = group.avatarUrl,
         onClick = onClick,
         onLongClick = onLongClick,
         pinned = group.pinned,
-        trailing = group.lastMessageAt?.let { at -> { MarginFigure(RelativeTime.short(at)) } },
+        trailing = {
+            // Fork: the row's actions in sight (the long-press / right-click menu, and select).
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                group.lastMessageAt?.let { at -> MarginFigure(RelativeTime.short(at)) }
+                if (onSelect != null) {
+                    androidx.compose.material3.IconButton(onClick = onSelect, modifier = Modifier.size(32.dp)) {
+                        Icon(androidx.compose.material.icons.Icons.Rounded.CheckBoxOutlineBlank, contentDescription = "Select", tint = ButlerTheme.colors.textLow, modifier = Modifier.size(18.dp))
+                    }
+                }
+                if (onMore != null) {
+                    androidx.compose.material3.IconButton(onClick = onMore, modifier = Modifier.size(32.dp)) {
+                        Icon(androidx.compose.material.icons.Icons.Rounded.MoreHoriz, contentDescription = "Pin, archive, folders", tint = ButlerTheme.colors.textMed, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+        },
     ) {
         val preview = group.lastMessagePreview?.takeIf { it.isNotBlank() }
         if (preview != null) {
@@ -443,6 +567,15 @@ private fun SlotLine(group: ChatGroup, fallbackPersonaName: String?, onClick: ()
         Spacer(Modifier.height(6.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             CountPill(text = "${group.chatCount} " + if (group.chatCount == 1) "chat" else "chats")
+            // Fork: how long it runs, and who you played as.
+            if (group.messageTotal > 0) {
+                Spacer(Modifier.width(8.dp))
+                Text("${group.messageTotal} messages", style = MaterialTheme.typography.labelSmall, color = ButlerTheme.colors.textLow)
+            }
+            group.personaName?.takeIf { it.isNotBlank() }?.let { p ->
+                Spacer(Modifier.width(8.dp))
+                Text("as $p", style = MaterialTheme.typography.labelSmall, color = ButlerTheme.colors.textLow, maxLines = 1)
+            }
             if (group.characterDeleted) {
                 Spacer(Modifier.width(8.dp))
                 Text("Unavailable", style = MaterialTheme.typography.labelSmall, color = ButlerTheme.colors.textLow)

@@ -53,7 +53,110 @@ class ChatsViewModel @Inject constructor(
     private val personas: PersonaRepository,
     private val folderRepo: FolderRepository,
     private val transfer: ChatTransfer,
+    private val chatsPrefs: com.cherry.butler.core.data.ChatsPrefs,
 ) : ViewModel() {
+
+    // ---- fork: sort, filters, view, select ----
+
+    val filter: StateFlow<com.cherry.butler.core.model.ChatFilter> get() = _filter
+    private val _filter = MutableStateFlow(chatsPrefs.filter.value)
+    val view: StateFlow<com.cherry.butler.core.model.ChatsView> = chatsPrefs.view
+
+    fun updateFilter(change: (com.cherry.butler.core.model.ChatFilter) -> com.cherry.butler.core.model.ChatFilter) {
+        val next = change(_filter.value)
+        _filter.value = next
+        chatsPrefs.setFilter(next)
+        if (next.active || next.inMessages) ensureFilled()
+    }
+
+    fun clearFilters() = updateFilter { com.cherry.butler.core.model.ChatFilter(inMessages = it.inMessages) }
+    fun setView(v: com.cherry.butler.core.model.ChatsView) = chatsPrefs.setView(v)
+
+    /** Only chats played as this persona (its id null: your profile); null clears it. */
+    fun filterPersona(option: PersonaOption?) = updateFilter {
+        when {
+            option == null -> it.copy(personaIds = null, personaLabel = null, profile = false)
+            option.id == null -> it.copy(personaIds = emptyList(), personaLabel = option.name, profile = true)
+            else -> it.copy(personaIds = listOf(option.id), personaLabel = option.name, profile = false)
+        }
+    }
+
+    private fun spec(query: String, folder: String?, archived: Int) =
+        com.cherry.butler.core.model.ChatListSpec.of(_filter.value, query, folder, archived, System.currentTimeMillis())
+
+    /** The main list under a sort or filter (the plain list stays [groups]). */
+    val filteredAll: Flow<PagingData<ChatGroup>> = _filter
+        .map { if (it.active) spec("", null, 0) else null }
+        .distinctUntilChanged()
+        .flatMapLatest { s -> if (s == null) flowOf(PagingData.empty()) else repository.filteredGroups(s) }
+        .cachedIn(viewModelScope)
+
+    private fun ensureFilled() {
+        if (filled) return
+        filled = true
+        viewModelScope.launch { runCatching { repository.fillChatMirror() }.onFailure { filled = false } }
+    }
+
+    private val _selecting = MutableStateFlow(false)
+    val selecting: StateFlow<Boolean> = _selecting.asStateFlow()
+    private val _selected = MutableStateFlow<Map<String, ChatGroup>>(emptyMap())
+    val selected: StateFlow<Map<String, ChatGroup>> = _selected.asStateFlow()
+    private val _bulkFolders = MutableStateFlow(false)
+    val bulkFolders: StateFlow<Boolean> = _bulkFolders.asStateFlow()
+    private val _confirmDelete = MutableStateFlow(false)
+    val confirmDelete: StateFlow<Boolean> = _confirmDelete.asStateFlow()
+
+    fun startSelecting(first: ChatGroup? = null) {
+        _selecting.value = true
+        _selected.value = first?.let { mapOf(it.characterId to it) } ?: emptyMap()
+    }
+    fun stopSelecting() { _selecting.value = false; _selected.value = emptyMap(); _bulkFolders.value = false; _confirmDelete.value = false }
+    fun toggleSelected(g: ChatGroup) = _selected.update { if (g.characterId in it) it - g.characterId else it + (g.characterId to g) }
+
+    /** Pins them all, or unpins them all when every one is pinned already. */
+    fun bulkPin() {
+        val all = _selected.value.values.toList()
+        if (all.isEmpty()) return
+        val pin = all.any { !it.pinned }
+        stopSelecting()
+        organize { all.forEach { folderRepo.setPinned(it.characterId, pin) } }
+    }
+
+    fun bulkArchive() {
+        val all = _selected.value.values.toList()
+        if (all.isEmpty()) return
+        val archiving = _tab.value != ChatsTab.Archived
+        stopSelecting()
+        organize { all.forEach { folderRepo.setArchived(it.characterId, archiving) } }
+    }
+
+    fun openBulkFolders() { if (_selected.value.isNotEmpty()) _bulkFolders.value = true }
+    fun closeBulkFolders() { _bulkFolders.value = false }
+
+    fun bulkIntoFolder(folder: ChatFolder) {
+        val all = _selected.value.values.toList()
+        stopSelecting()
+        organize { all.forEach { folderRepo.setInFolder(it.characterId, folder.id, true) } }
+    }
+
+    fun bulkIntoNewFolder(name: String) {
+        val all = _selected.value.values.toList()
+        stopSelecting()
+        organize {
+            val made = folderRepo.create(name)
+            all.forEach { folderRepo.setInFolder(it.characterId, made.id, true) }
+        }
+    }
+
+    fun askDelete() { if (_selected.value.isNotEmpty()) _confirmDelete.value = true }
+    fun cancelDelete() { _confirmDelete.value = false }
+
+    /** Deletes every chat with the chosen characters, on Janitor too. */
+    fun bulkDelete() {
+        val all = _selected.value.values.toList()
+        stopSelecting()
+        organize { all.forEach { repository.deleteCharacterChats(it.characterId) } }
+    }
 
     // ---- import ----
 
@@ -107,11 +210,13 @@ class ChatsViewModel @Inject constructor(
 
     /** A folder's or the archive's rows; the main list stays [groups], built once. */
     val tabGroups: Flow<PagingData<ChatGroup>> = _tab
-        .flatMapLatest { t ->
+        .combine(_filter) { t, f -> t to f }
+        .distinctUntilChanged()
+        .flatMapLatest { (t, f) ->
             when (t) {
                 ChatsTab.All -> flowOf(PagingData.empty())
-                is ChatsTab.Folder -> repository.chatGroups(folder = t.id)
-                ChatsTab.Archived -> repository.chatGroups(archived = true)
+                is ChatsTab.Folder -> if (f.active) repository.filteredGroups(spec("", t.id, -1)) else repository.chatGroups(folder = t.id)
+                ChatsTab.Archived -> if (f.active) repository.filteredGroups(spec("", null, 1)) else repository.chatGroups(archived = true)
             }
         }
         .cachedIn(viewModelScope)
@@ -230,10 +335,14 @@ class ChatsViewModel @Inject constructor(
         .map { com.cherry.butler.core.data.ChatQuery.parse(it) }
         .distinctUntilChanged()
         .combine(personas.options) { q, options -> q to options }
-        .flatMapLatest { (q, options) ->
+        .combine(_filter) { pair, f -> Triple(pair.first, pair.second, f) }
+        .flatMapLatest { (q, options, f) ->
             val name = q.persona
             when {
-                name == null -> if (q.text.isEmpty()) flowOf(PagingData.empty()) else repository.chatGroups(q.text)
+                // Fork: a search honours the sort and filters, and can look inside messages.
+                name == null -> if (q.text.isEmpty()) flowOf(PagingData.empty())
+                    else if (f.active || f.inMessages) repository.filteredGroups(spec(q.text, null, -1))
+                    else repository.chatGroups(q.text)
                 name.isEmpty() -> flowOf(PagingData.empty())
                 else -> {
                     val named = matching(options, name, q.exact)

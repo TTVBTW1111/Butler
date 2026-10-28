@@ -77,6 +77,24 @@ class ChatRepository @Inject constructor(
         pagingSourceFactory = { chatDao.searchByPersonaPagingSource(text.trim(), personaIds, orProfile) },
     ).flow.map { paging -> paging.map(ChatGroupRow::toGroup) }
 
+    /** Fork: the Chats list filtered and sorted (ChatListSpec), from the mirror. */
+    fun filteredGroups(spec: com.cherry.butler.core.model.ChatListSpec): Flow<PagingData<ChatGroup>> = Pager(
+        config = PagingConfig(pageSize = PAGE_SIZE, enablePlaceholders = false),
+        pagingSourceFactory = {
+            chatDao.filteredPagingSource(
+                query = spec.query, inMessages = spec.inMessages, folder = spec.folder, archived = spec.archived,
+                anyPersona = spec.personaIds == null, personaIds = spec.personaIds.orEmpty(), orProfile = spec.orProfile,
+                since = spec.since, until = spec.until, multiOnly = spec.multiOnly, pinnedOnly = spec.pinnedOnly,
+                minMessages = spec.minMessages, pinnedFirst = spec.pinnedFirst, sort = spec.sort.ordinal,
+            )
+        },
+    ).flow.map { paging -> paging.map(ChatGroupRow::toGroup) }
+
+    /** Fork: every chat with these characters, deleted on Janitor and here. */
+    suspend fun deleteCharacterChats(characterId: String) {
+        chatDao.idsForCharacter(characterId).forEach { deleteChat(it) }
+    }
+
     /** Every chat in a folder, into the mirror, so the folder's tab shows all of them. */
     suspend fun storeFolder(folderId: String, maxPages: Int = 40) {
         var page = 1
@@ -325,6 +343,7 @@ private fun ChatGroupRow.toGroup() = ChatGroup(
     personaName = personaName,
     chatCount = chatCount,
     pinned = pinned,
+    messageTotal = messageTotal,
 )
 
 private fun ChatDetailDto.toEntity(existing: ChatEntity?, now: Long): ChatEntity {

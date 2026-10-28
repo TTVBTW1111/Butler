@@ -93,6 +93,8 @@ data class ChatGroupRow(
     val personaName: String?,
     val chatCount: Int,
     val pinned: Boolean = false,
+    /** Fork: every message in this character's chats, by the server's counts. */
+    val messageTotal: Int = 0,
 )
 
 /**

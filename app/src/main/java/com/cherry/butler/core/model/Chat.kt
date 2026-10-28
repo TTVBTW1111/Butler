@@ -30,6 +30,8 @@ data class ChatGroup(
     val personaName: String?,
     val chatCount: Int,
     val pinned: Boolean = false,
+    /** Fork: messages across this character's chats. */
+    val messageTotal: Int = 0,
 ) {
     val avatarUrl: String? get() = JanitorConfig.avatarUrl(characterAvatar)
 }

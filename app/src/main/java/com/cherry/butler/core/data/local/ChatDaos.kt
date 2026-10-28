@@ -23,7 +23,7 @@ interface ChatDao {
     @Query(
         """SELECT c.characterId, COALESCE(NULLIF(c.chatName, ''), c.characterName) AS characterName, c.characterAvatar, c.characterDeleted, c.id AS latestChatId,
            c.lastMessagePreview, c.personaName, MAX(COALESCE(c.lastMessageAt, 0)) AS lastMessageAt, COUNT(*) AS chatCount,
-           (m.pinnedAt IS NOT NULL) AS pinned
+           (m.pinnedAt IS NOT NULL) AS pinned, SUM(c.messageCount) AS messageTotal
            FROM chats c LEFT JOIN group_marks m ON m.characterId = c.characterId
            WHERE COALESCE(m.archived, 0) = :archived
              AND (:folder IS NULL OR c.folderIds LIKE '%,' || :folder || ',%')
@@ -42,7 +42,7 @@ interface ChatDao {
     @Query(
         """SELECT c.characterId, COALESCE(NULLIF(c.chatName, ''), c.characterName) AS characterName, c.characterAvatar, c.characterDeleted, c.id AS latestChatId,
            c.lastMessagePreview, c.personaName, MAX(COALESCE(c.lastMessageAt, 0)) AS lastMessageAt, COUNT(*) AS chatCount,
-           (m.pinnedAt IS NOT NULL) AS pinned
+           (m.pinnedAt IS NOT NULL) AS pinned, SUM(c.messageCount) AS messageTotal
            FROM chats c LEFT JOIN group_marks m ON m.characterId = c.characterId
            WHERE (c.characterName LIKE '%' || :query || '%' OR c.chatName LIKE '%' || :query || '%') GROUP BY c.characterId ORDER BY lastMessageAt DESC""",
     )
@@ -57,13 +57,62 @@ interface ChatDao {
     @Query(
         """SELECT c.characterId, COALESCE(NULLIF(c.chatName, ''), c.characterName) AS characterName, c.characterAvatar, c.characterDeleted, c.id AS latestChatId,
            c.lastMessagePreview, c.personaName, MAX(COALESCE(c.lastMessageAt, 0)) AS lastMessageAt, COUNT(*) AS chatCount,
-           (m.pinnedAt IS NOT NULL) AS pinned
+           (m.pinnedAt IS NOT NULL) AS pinned, SUM(c.messageCount) AS messageTotal
            FROM chats c LEFT JOIN group_marks m ON m.characterId = c.characterId
            WHERE (c.personaId IN (:personaIds) OR (:orProfile AND c.personaId IS NULL))
              AND (:query = '' OR c.characterName LIKE '%' || :query || '%' OR c.chatName LIKE '%' || :query || '%')
            GROUP BY c.characterId ORDER BY lastMessageAt DESC""",
     )
     fun searchByPersonaPagingSource(query: String, personaIds: List<String>, orProfile: Boolean): PagingSource<Int, ChatGroupRow>
+
+    /**
+     * Fork: the Chats list with every filter and sort (ChatListSpec). [archived] -1 is both,
+     * 0 the main list, 1 the archive. [inMessages] also matches the words in messages kept on
+     * this device and in each chat's last message. [sort]: 0 recent, 1 oldest, 2 name A–Z,
+     * 3 name Z–A, 4 most chats, 5 most messages.
+     */
+    @Query(
+        """SELECT c.characterId, COALESCE(NULLIF(c.chatName, ''), c.characterName) AS characterName, c.characterAvatar, c.characterDeleted, c.id AS latestChatId,
+           c.lastMessagePreview, c.personaName, MAX(COALESCE(c.lastMessageAt, 0)) AS lastMessageAt, COUNT(*) AS chatCount,
+           (m.pinnedAt IS NOT NULL) AS pinned, SUM(c.messageCount) AS messageTotal
+           FROM chats c LEFT JOIN group_marks m ON m.characterId = c.characterId
+           WHERE (:archived = -1 OR COALESCE(m.archived, 0) = :archived)
+             AND (:folder IS NULL OR c.folderIds LIKE '%,' || :folder || ',%')
+             AND (:anyPersona OR c.personaId IN (:personaIds) OR (:orProfile AND c.personaId IS NULL))
+             AND (:query = '' OR c.characterName LIKE '%' || :query || '%' OR c.chatName LIKE '%' || :query || '%'
+                  OR (:inMessages AND (c.lastMessagePreview LIKE '%' || :query || '%'
+                      OR c.id IN (SELECT chatId FROM messages WHERE text LIKE '%' || :query || '%'))))
+           GROUP BY c.characterId
+           HAVING (:since = 0 OR MAX(COALESCE(c.lastMessageAt, 0)) >= :since)
+             AND (:until = 0 OR MAX(COALESCE(c.lastMessageAt, 0)) < :until)
+             AND (:multiOnly = 0 OR COUNT(*) > 1)
+             AND (:pinnedOnly = 0 OR m.pinnedAt IS NOT NULL)
+             AND (:minMessages = 0 OR SUM(c.messageCount) >= :minMessages)
+           ORDER BY CASE WHEN :pinnedFirst THEN (m.pinnedAt IS NOT NULL) ELSE 0 END DESC,
+             CASE WHEN :sort = 0 THEN MAX(COALESCE(c.lastMessageAt, 0)) END DESC,
+             CASE WHEN :sort = 1 THEN MAX(COALESCE(c.lastMessageAt, 0)) END ASC,
+             CASE WHEN :sort = 2 THEN LOWER(COALESCE(NULLIF(c.chatName, ''), c.characterName)) END ASC,
+             CASE WHEN :sort = 3 THEN LOWER(COALESCE(NULLIF(c.chatName, ''), c.characterName)) END DESC,
+             CASE WHEN :sort = 4 THEN COUNT(*) END DESC,
+             CASE WHEN :sort = 5 THEN SUM(c.messageCount) END DESC,
+             MAX(COALESCE(c.lastMessageAt, 0)) DESC""",
+    )
+    fun filteredPagingSource(
+        query: String,
+        inMessages: Boolean,
+        folder: String?,
+        archived: Int,
+        anyPersona: Boolean,
+        personaIds: List<String>,
+        orProfile: Boolean,
+        since: Long,
+        until: Long,
+        multiOnly: Boolean,
+        pinnedOnly: Boolean,
+        minMessages: Int,
+        pinnedFirst: Boolean,
+        sort: Int,
+    ): PagingSource<Int, ChatGroupRow>
 
     @Query("SELECT * FROM chats WHERE characterId = :characterId ORDER BY lastMessageAt DESC, id DESC")
     fun observeByCharacter(characterId: String): Flow<List<ChatEntity>>
