@@ -39,7 +39,7 @@ class BrowseViewModel @Inject constructor(
     private val repository: CharacterRepository,
     private val tagRemoteSource: TagRemoteSource,
     private val lastPlace: LastPlace,
-    browsePrefs: com.cherry.butler.core.data.BrowsePrefs,
+    private val browsePrefs: com.cherry.butler.core.data.BrowsePrefs,
     private val favorites: com.cherry.butler.core.data.FavoritesRepository,
 ) : ViewModel() {
 
