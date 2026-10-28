@@ -1,5 +1,6 @@
 package com.cherry.butler.desktop.ui
 
+import androidx.compose.ui.draw.blur
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -235,6 +236,19 @@ fun DesktopShell() {
         com.cherry.butler.ui.components.LocalFindHandle provides com.cherry.butler.desktop.DesktopKeys.chatFind,
     ) {
         Box(Modifier.fillMaxSize()) {
+        // Fork: the wallpaper behind the whole window; glass in the theme lets it through.
+        val fork = com.cherry.butler.core.design.LocalForkLook.current
+        fork.wallpaper?.let { path ->
+            com.cherry.butler.ui.components.Backdrop(
+                dim = fork.wallpaperDim,
+                parallax = false,
+                file = java.io.File(path),
+                fileKey = "fork-wallpaper-${fork.wallpaperKey}",
+                modifier = Modifier.fillMaxSize().then(
+                    if (fork.wallpaperBlur > 0f) Modifier.blur(androidx.compose.ui.unit.Dp(fork.wallpaperBlur)) else Modifier,
+                ),
+            )
+        }
         Row(Modifier.fillMaxSize().background(ButlerTheme.colors.chrome)) {
             DesktopRail(
                 lit = tab.takeIf { route != Routes.CHAT },

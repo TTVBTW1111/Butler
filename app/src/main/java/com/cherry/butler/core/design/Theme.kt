@@ -114,8 +114,20 @@ fun ButlerTheme(
     }
     // The shipped looks are built once; the Custom one whenever its two colours change.
     val customTones = androidx.compose.runtime.remember(custom) { customTones(custom) }
-    val colorScheme = if (theme == AppTheme.Custom) androidx.compose.runtime.remember(customTones) { scheme(customTones) } else Schemes.getValue(theme)
-    val extended = if (theme == AppTheme.Custom) androidx.compose.runtime.remember(customTones) { extendedColors(customTones) } else Extended.getValue(theme)
+    // Fork: glass. Over a wallpaper, the grounds and surfaces let it through; text stays solid.
+    val glassTones = if (fork.hasWallpaper && fork.glass > 0f) {
+        androidx.compose.runtime.remember(theme, customTones, fork.glass) { glassy(if (theme == AppTheme.Custom) customTones else theme.tones(custom), fork.glass) }
+    } else null
+    val colorScheme = when {
+        glassTones != null -> androidx.compose.runtime.remember(glassTones) { scheme(glassTones) }
+        theme == AppTheme.Custom -> androidx.compose.runtime.remember(customTones) { scheme(customTones) }
+        else -> Schemes.getValue(theme)
+    }
+    val extended = when {
+        glassTones != null -> androidx.compose.runtime.remember(glassTones) { extendedColors(glassTones) }
+        theme == AppTheme.Custom -> androidx.compose.runtime.remember(customTones) { extendedColors(customTones) }
+        else -> Extended.getValue(theme)
+    }
     val shapes = when (theme) {
         AppTheme.LightsOut -> LightsOutShapes
         AppTheme.Custom -> androidx.compose.runtime.remember(custom.corners) { scaledShapes(custom.corners) }
@@ -149,4 +161,17 @@ object ButlerTheme {
     val colors: ButlerExtendedColors
         @Composable @ReadOnlyComposable
         get() = LocalButlerExtendedColors.current
+}
+
+
+/** Fork: a look's tones made see-through by [glass] (0..1): grounds most, raised surfaces least. */
+internal fun glassy(t: Tones, glass: Float): Tones {
+    val g = glass.coerceIn(0f, 0.9f)
+    fun androidx.compose.ui.graphics.Color.see(keep: Float) = copy(alpha = (1f - g * keep).coerceIn(0.08f, 1f))
+    return t.copy(
+        ground = t.ground.see(1f),
+        chrome = t.chrome.see(1f),
+        surfaceElevated = t.surfaceElevated.see(0.8f),
+        surfaceHigh = t.surfaceHigh.see(0.6f),
+    )
 }

@@ -77,6 +77,8 @@ internal fun DitherField(
     shape: DitherShape = DitherShape.Centre,
     driftFps: Int = 0,
 ) {
+    // Fork: a wallpaper takes the dither's place.
+    if (com.cherry.butler.core.design.LocalForkLook.current.hasWallpaper) return
     val dot = with(LocalDensity.current) { 2.dp.toPx() }.roundToInt().coerceAtLeast(2).toFloat()
     val faint = ButlerTheme.colors.rule
     val near = ButlerTheme.colors.textLow

@@ -326,6 +326,24 @@ class SettingsViewModel @Inject constructor(
     fun setPictureFit(v: com.cherry.butler.core.design.PictureFit) = forkLookPrefs.setPictureFit(v)
     fun setBrowseWidth(v: com.cherry.butler.core.design.BrowseWidth) = forkLookPrefs.setBrowseWidth(v)
     fun resetForkLook() = forkLookPrefs.reset()
+    fun setWallpaperDim(v: Float) = forkLookPrefs.setWallpaperDim(v)
+    fun setWallpaperBlur(v: Float) = forkLookPrefs.setWallpaperBlur(v)
+    fun setGlass(v: Float) = forkLookPrefs.setGlass(v)
+    fun clearWallpaper() = forkLookPrefs.clearWallpaper()
+
+    private val _wallpaperError = MutableStateFlow<String?>(null)
+    val wallpaperError: StateFlow<String?> = _wallpaperError.asStateFlow()
+
+    /** The picture becomes the wallpaper; the first time, the panels turn a little see-through so it shows. */
+    fun setWallpaper(uri: android.net.Uri) {
+        viewModelScope.launch {
+            _wallpaperError.value = null
+            val first = !forkLookPrefs.look.value.hasWallpaper
+            runCatching { forkLookPrefs.setWallpaper(uri) }
+                .onSuccess { if (first && forkLookPrefs.look.value.glass == 0f) forkLookPrefs.setGlass(0.35f) }
+                .onFailure { _wallpaperError.value = "Couldn't use that picture. ${it.message.orEmpty()}" }
+        }
+    }
 
     /** A rice preset: its colours become the Custom look, and the Custom look is put on. */
     fun applyPreset(p: com.cherry.butler.core.design.RicePreset) {

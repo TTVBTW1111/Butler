@@ -43,6 +43,18 @@ data class ForkLook(
     val tileShape: TileShape = TileShape.Classic,
     val pictureFit: PictureFit = PictureFit.Fill,
     val browseWidth: BrowseWidth = BrowseWidth.Classic,
-)
+    /** The PC's wallpaper behind the whole window: a file in the app's own storage, or none. */
+    val wallpaper: String? = null,
+    /** Changes with each new wallpaper, so the picture is read again. */
+    val wallpaperKey: Long = 0,
+    /** How much darker the wallpaper is drawn (0 none, 0.8 nearly black). */
+    val wallpaperDim: Float = 0.35f,
+    /** Wallpaper blur, in dp. */
+    val wallpaperBlur: Float = 0f,
+    /** How see-through the panels are over the wallpaper (0 solid, as Butler). */
+    val glass: Float = 0f,
+) {
+    val hasWallpaper: Boolean get() = wallpaper != null
+}
 
 val LocalForkLook = staticCompositionLocalOf { ForkLook() }

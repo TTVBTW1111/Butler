@@ -2080,7 +2080,30 @@ private fun ForkLayoutRows(viewModel: SettingsViewModel) {
             }
         }
     }
+    if (com.cherry.butler.core.platform.Device.NAME == "PC") ForkWallpaperRows(viewModel, look)
     if (look != com.cherry.butler.core.design.ForkLook()) {
-        LinkRow(title = "Back to Butler's layout", subtitle = null, onClick = viewModel::resetForkLook, icon = Icons.Rounded.ViewAgenda)
+        LinkRow(title = "Back to Butler's layout", subtitle = "Card size, shape, pictures, width and wallpaper", onClick = viewModel::resetForkLook, icon = Icons.Rounded.ViewAgenda)
+    }
+}
+
+/** Fork: the PC's wallpaper behind the whole window, and how much the panels let it through. */
+@Composable
+private fun ForkWallpaperRows(viewModel: SettingsViewModel, look: com.cherry.butler.core.design.ForkLook) {
+    val error by viewModel.wallpaperError.collectAsStateWithLifecycle()
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.setWallpaper(uri) }
+    LinkRow(
+        title = "Wallpaper",
+        subtitle = if (look.hasWallpaper) "Your picture, behind the whole window. Click to change it." else "Butler's dotted ground. Click to pick a picture.",
+        onClick = { pick.launch(arrayOf("image/*")) },
+        icon = Icons.Rounded.Palette,
+    )
+    error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = ButlerTheme.colors.danger, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
+    if (look.hasWallpaper) {
+        SliderRow(title = "Glass", value = look.glass, range = 0f..0.85f, step = 0.05f, format = { if (it == 0f) "Solid" else "${(it * 100).toInt()}% see-through" }, onCommit = viewModel::setGlass)
+        SliderRow(title = "Wallpaper dim", value = look.wallpaperDim, range = 0f..0.8f, step = 0.05f, format = { "${(it * 100).toInt()}%" }, onCommit = viewModel::setWallpaperDim)
+        SliderRow(title = "Wallpaper blur", value = look.wallpaperBlur, range = 0f..40f, step = 2f, format = { if (it == 0f) "Sharp" else "${it.toInt()} dp" }, onCommit = viewModel::setWallpaperBlur)
+        LinkRow(title = "Remove wallpaper", subtitle = null, onClick = viewModel::clearWallpaper, icon = Icons.Rounded.Palette)
     }
 }
