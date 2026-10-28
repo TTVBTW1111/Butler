@@ -22,6 +22,8 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -249,19 +251,34 @@ fun DesktopShell() {
                 ),
             )
         }
-        Row(Modifier.fillMaxSize().background(ButlerTheme.colors.chrome)) {
+        // Fork: where the dock sits, and how it looks; the rail down the left is Butler's own.
+        val dock = fork.dock
+        val island = dock == com.cherry.butler.core.design.DockStyle.Floating || dock == com.cherry.butler.core.design.DockStyle.Bottom
+        val frame = if (island && fork.hasWallpaper) androidx.compose.ui.graphics.Color.Transparent else ButlerTheme.colors.chrome
+        val paneShape = when (dock) {
+            com.cherry.butler.core.design.DockStyle.Rail -> RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp)
+            com.cherry.butler.core.design.DockStyle.Right -> RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+            com.cherry.butler.core.design.DockStyle.Floating -> RoundedCornerShape(20.dp)
+            com.cherry.butler.core.design.DockStyle.Bottom -> RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp)
+        }
+        val rail: @Composable (Boolean) -> Unit = { horizontal ->
             DesktopRail(
                 lit = tab.takeIf { route != Routes.CHAT },
                 openChatId = openChatId,
                 onSection = ::goTo,
                 onOpenChat = ::openChat,
+                horizontal = horizontal,
+                floating = island,
+                showRecent = fork.dockRecents,
             )
+        }
+        val pane: @Composable (Modifier) -> Unit = { paneModifier ->
             // The ground rests on the rail's chrome with rounded inner corners, as the phone's
             // ground rests on its tab bar.
             Surface(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = paneModifier,
                 color = MaterialTheme.colorScheme.background,
-                shape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp),
+                shape = paneShape,
             ) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val sideBySide = maxWidth >= SideBySideFrom
@@ -312,6 +329,24 @@ fun DesktopShell() {
                         )
                     }
                 }
+            }
+                }
+        when (dock) {
+            com.cherry.butler.core.design.DockStyle.Bottom -> androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().background(frame)) {
+                pane(Modifier.weight(1f).fillMaxWidth())
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { rail(true) }
+            }
+            com.cherry.butler.core.design.DockStyle.Right -> Row(Modifier.fillMaxSize().background(frame)) {
+                pane(Modifier.weight(1f).fillMaxHeight())
+                rail(false)
+            }
+            com.cherry.butler.core.design.DockStyle.Floating -> Row(Modifier.fillMaxSize().background(frame)) {
+                rail(false)
+                pane(Modifier.weight(1f).fillMaxHeight().padding(top = 10.dp, end = 10.dp, bottom = 10.dp))
+            }
+            com.cherry.butler.core.design.DockStyle.Rail -> Row(Modifier.fillMaxSize().background(frame)) {
+                rail(false)
+                pane(Modifier.weight(1f).fillMaxHeight())
             }
         }
         // An open chat's light, over the rail and the panes alike.

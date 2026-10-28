@@ -33,6 +33,14 @@ enum class BrowseWidth(val label: String, val columns: Int?) {
     Full("Whole window", null),
 }
 
+/** Where the PC's dock (the rail of sections and recent chats) sits, and how. */
+enum class DockStyle(val label: String, val blurb: String) {
+    Rail("Rail", "Down the left edge, as Butler's own"),
+    Floating("Floating dock", "A rounded island on the left, with room around it"),
+    Right("Rail on the right", "Down the right edge"),
+    Bottom("Bottom taskbar", "Centred along the bottom, like Windows 11"),
+}
+
 /**
  * The fork's look settings (ricing): every one optional, and the defaults are Butler's own
  * look exactly. Handed down by [ButlerTheme] as [LocalForkLook].
@@ -53,6 +61,9 @@ data class ForkLook(
     val wallpaperBlur: Float = 0f,
     /** How see-through the panels are over the wallpaper (0 solid, as Butler). */
     val glass: Float = 0f,
+    val dock: DockStyle = DockStyle.Rail,
+    /** Whether the dock shows your recent chats beside the sections. */
+    val dockRecents: Boolean = true,
 ) {
     val hasWallpaper: Boolean get() = wallpaper != null
 }

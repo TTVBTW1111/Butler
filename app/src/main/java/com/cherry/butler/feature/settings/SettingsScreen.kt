@@ -1046,7 +1046,7 @@ private fun LookSection(viewModel: SettingsViewModel, onOpenCustomize: () -> Uni
         val thoughtLook by viewModel.thoughtLook.collectAsStateWithLifecycle()
         LinkRow(title = "Thinking line", subtitle = "${thinkingLook.label} · ${thoughtLook.label}", onClick = onOpenThinking, icon = Icons.Rounded.Lightbulb)
         val paged by viewModel.pagedHome.collectAsStateWithLifecycle()
-        DropRow(title = "Home list", value = if (paged) "Pages" else "Endless scroll", icon = Icons.Rounded.ViewList) { close ->
+        DropRow(title = "Home list", value = if (paged) "Pages" else "Endless scroll", icon = Icons.Rounded.ViewAgenda) { close ->
             DropItem(title = "Endless scroll", subtitle = "More arrives as you reach the end", selected = !paged, onClick = { close(); viewModel.setPagedHome(false) })
             DropItem(title = "Pages", subtitle = "Previous and Next under each page", selected = paged, onClick = { close(); viewModel.setPagedHome(true) })
         }
@@ -2074,13 +2074,24 @@ private fun ForkLayoutRows(viewModel: SettingsViewModel) {
         }
     }
     if (com.cherry.butler.core.platform.Device.NAME == "PC") {
-        DropRow(title = "Browse width", value = look.browseWidth.label, icon = Icons.Rounded.ViewList) { close ->
+        DropRow(title = "Browse width", value = look.browseWidth.label, icon = Icons.Rounded.ViewAgenda) { close ->
             com.cherry.butler.core.design.BrowseWidth.entries.forEach { v ->
                 DropItem(title = v.label, subtitle = if (v == com.cherry.butler.core.design.BrowseWidth.Classic) "Butler's own" else null, selected = v == look.browseWidth, onClick = { close(); viewModel.setBrowseWidth(v) })
             }
         }
     }
-    if (com.cherry.butler.core.platform.Device.NAME == "PC") ForkWallpaperRows(viewModel, look)
+    if (com.cherry.butler.core.platform.Device.NAME == "PC") {
+        DropRow(title = "Dock", value = look.dock.label, icon = Icons.Rounded.ViewAgenda) { close ->
+            com.cherry.butler.core.design.DockStyle.entries.forEach { v ->
+                DropItem(title = v.label, subtitle = v.blurb, selected = v == look.dock, onClick = { close(); viewModel.setDock(v) })
+            }
+        }
+        DropRow(title = "Recent chats in the dock", value = if (look.dockRecents) "Shown" else "Hidden", icon = Icons.Rounded.ViewAgenda) { close ->
+            DropItem(title = "Shown", subtitle = "Your latest chats under the sections", selected = look.dockRecents, onClick = { close(); viewModel.setDockRecents(true) })
+            DropItem(title = "Hidden", subtitle = "Just the sections, a cleaner dock", selected = !look.dockRecents, onClick = { close(); viewModel.setDockRecents(false) })
+        }
+        ForkWallpaperRows(viewModel, look)
+    }
     if (look != com.cherry.butler.core.design.ForkLook()) {
         LinkRow(title = "Back to Butler's layout", subtitle = "Card size, shape, pictures, width and wallpaper", onClick = viewModel::resetForkLook, icon = Icons.Rounded.ViewAgenda)
     }

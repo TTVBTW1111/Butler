@@ -33,6 +33,8 @@ class ForkLookPrefs @Inject constructor(@ApplicationContext context: Context) {
             wallpaperDim = prefs.getFloat("wallpaper_dim", 0.35f),
             wallpaperBlur = prefs.getFloat("wallpaper_blur", 0f),
             glass = prefs.getFloat("glass", 0f),
+            dock = read("dock", com.cherry.butler.core.design.DockStyle.Rail),
+            dockRecents = prefs.getBoolean("dock_recents", true),
         ),
     )
     private val files = context.filesDir
@@ -46,6 +48,8 @@ class ForkLookPrefs @Inject constructor(@ApplicationContext context: Context) {
 
     fun setWallpaperDim(v: Float) { prefs.edit().putFloat("wallpaper_dim", v).apply(); _look.update { it.copy(wallpaperDim = v) } }
     fun setWallpaperBlur(v: Float) { prefs.edit().putFloat("wallpaper_blur", v).apply(); _look.update { it.copy(wallpaperBlur = v) } }
+    fun setDock(v: com.cherry.butler.core.design.DockStyle) = put("dock", v.name) { it.copy(dock = v) }
+    fun setDockRecents(v: Boolean) { prefs.edit().putBoolean("dock_recents", v).apply(); _look.update { it.copy(dockRecents = v) } }
     fun setGlass(v: Float) { prefs.edit().putFloat("glass", v).apply(); _look.update { it.copy(glass = v) } }
 
     /** Copies the picture into the app's own storage, so it stays when the original moves. */

@@ -39,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.res.stringResource
@@ -80,6 +82,9 @@ fun DesktopRail(
     openChatId: Long?,
     onSection: (TopLevelDestination) -> Unit,
     onOpenChat: (Long) -> Unit,
+    horizontal: Boolean = false,
+    floating: Boolean = false,
+    showRecent: Boolean = true,
 ) {
     val graph = DesktopGraph.component
     val shell: ShellViewModel = hiltViewModel()
@@ -92,42 +97,72 @@ fun DesktopRail(
         openChatId?.let { id -> graph.chatRepository().observeChat(id).map { it?.characterId } } ?: flowOf(null)
     }.collectAsState(null)
 
+    val sections: @Composable () -> Unit = {
+        TopLevelDestination.entries.forEach { dest ->
+            SectionKey(
+                dest = dest,
+                lit = dest == lit,
+                dot = dest == TopLevelDestination.Notifications && unread > 0,
+                onClick = { onSection(dest) },
+            )
+        }
+    }
+    val face: @Composable (Int) -> Unit = { i ->
+        recent[i]?.let { group ->
+            RecentFace(
+                group = group,
+                open = group.characterId == openCharacter,
+                replying = group.latestChatId in working.keys,
+                onClick = { onOpenChat(group.latestChatId) },
+            )
+        }
+    }
+    val count = if (showRecent) minOf(recent.itemCount, RECENT) else 0
+
+    if (horizontal) {
+        // The bottom taskbar (fork ricing): one rounded island, sections then recent chats.
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.padding(vertical = 10.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(ButlerTheme.colors.chrome)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { sections() }
+            if (count > 0) {
+                Box(Modifier.padding(horizontal = 10.dp).height(28.dp).width(hairline()).background(ButlerTheme.colors.rule))
+                androidx.compose.foundation.lazy.LazyRow(
+                    modifier = Modifier.widthIn(max = 640.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy((-14).dp),
+                ) {
+                    items(count = count, key = { i -> recent.peek(i)?.characterId ?: i }) { i -> face(i) }
+                }
+            }
+        }
+        return
+    }
+
     Column(
-        modifier = Modifier.width(RailWidth).fillMaxHeight().background(ButlerTheme.colors.chrome).padding(top = 14.dp),
+        modifier = (if (floating) Modifier.padding(10.dp).clip(RoundedCornerShape(20.dp)) else Modifier)
+            .width(RailWidth).fillMaxHeight().background(ButlerTheme.colors.chrome).padding(top = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            TopLevelDestination.entries.forEach { dest ->
-                SectionKey(
-                    dest = dest,
-                    lit = dest == lit,
-                    dot = dest == TopLevelDestination.Notifications && unread > 0,
-                    onClick = { onSection(dest) },
-                )
-            }
+            sections()
         }
-        Box(
-            Modifier.padding(vertical = 14.dp).width(28.dp).height(hairline())
-                .background(ButlerTheme.colors.rule),
-        )
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 14.dp),
-        ) {
-            items(
-                count = minOf(recent.itemCount, RECENT),
-                key = { i -> recent.peek(i)?.characterId ?: i },
-            ) { i ->
-                recent[i]?.let { group ->
-                    RecentFace(
-                        group = group,
-                        open = group.characterId == openCharacter,
-                        replying = group.latestChatId in working.keys,
-                        onClick = { onOpenChat(group.latestChatId) },
-                    )
-                }
+        if (count > 0) {
+            Box(
+                Modifier.padding(vertical = 14.dp).width(28.dp).height(hairline())
+                    .background(ButlerTheme.colors.rule),
+            )
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 14.dp),
+            ) {
+                items(count = count, key = { i -> recent.peek(i)?.characterId ?: i }) { i -> face(i) }
             }
         }
     }

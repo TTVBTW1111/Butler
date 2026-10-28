@@ -329,6 +329,8 @@ class SettingsViewModel @Inject constructor(
     fun setWallpaperDim(v: Float) = forkLookPrefs.setWallpaperDim(v)
     fun setWallpaperBlur(v: Float) = forkLookPrefs.setWallpaperBlur(v)
     fun setGlass(v: Float) = forkLookPrefs.setGlass(v)
+    fun setDock(v: com.cherry.butler.core.design.DockStyle) = forkLookPrefs.setDock(v)
+    fun setDockRecents(v: Boolean) = forkLookPrefs.setDockRecents(v)
     fun clearWallpaper() = forkLookPrefs.clearWallpaper()
 
     private val _wallpaperError = MutableStateFlow<String?>(null)
