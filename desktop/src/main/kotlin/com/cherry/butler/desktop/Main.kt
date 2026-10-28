@@ -237,6 +237,7 @@ private fun ButlerWindow(graph: DesktopComponent, onGround: (Int) -> Unit) {
     val thoughtLook by themePrefs.thoughtLook.collectAsState()
     val look by textLook.look.collectAsState()
     val custom by themePrefs.custom.collectAsState()
+    val fork by graph.forkLook().look.collectAsState()
     val chatFontKey by fontPrefs.chat.collectAsState()
     val appFontKey by fontPrefs.app.collectAsState()
     val appTextScale by fontPrefs.appScale.collectAsState()
@@ -247,7 +248,7 @@ private fun ButlerWindow(graph: DesktopComponent, onGround: (Int) -> Unit) {
     val appFont = remember(appFontKey, addedFonts) { com.cherry.butler.core.design.fontFamilyOf(fontPrefs, appFontKey) }
     val locked by appLock.locked.collectAsState()
     @Suppress("UNUSED_VARIABLE") val light = theme.isLight(custom)
-    ButlerTheme(theme = theme, chatStyle = chatStyle, look = look, custom = custom, appFont = appFont, chatFont = chatFont, appTextScale = appTextScale, appLetterSpacing = fontSpacing[appFontKey] ?: 0, chatLetterSpacing = fontSpacing[chatFontKey] ?: 0, thinkingLook = thinkingLook, thoughtLook = thoughtLook) {
+    ButlerTheme(theme = theme, chatStyle = chatStyle, look = look, custom = custom, appFont = appFont, chatFont = chatFont, appTextScale = appTextScale, appLetterSpacing = fontSpacing[appFontKey] ?: 0, chatLetterSpacing = fontSpacing[chatFontKey] ?: 0, thinkingLook = thinkingLook, thoughtLook = thoughtLook, fork = fork) {
         val ground = MaterialTheme.colorScheme.background
         androidx.compose.runtime.LaunchedEffect(ground) { onGround(ground.toArgb()) }
         Box(Modifier.fillMaxSize()) {

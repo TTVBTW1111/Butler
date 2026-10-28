@@ -32,6 +32,7 @@ interface DesktopComponent : WidgetsEntryPoint, LockEntryPoint {
     fun updates(): com.cherry.butler.core.update.UpdateChecker
     fun fontPrefs(): com.cherry.butler.core.data.FontPrefs
     fun themePrefs(): com.cherry.butler.core.data.ThemePrefs
+    fun forkLook(): com.cherry.butler.core.data.ForkLookPrefs
     fun lastPlace(): com.cherry.butler.core.data.LastPlace
     fun textLook(): com.cherry.butler.core.data.TextLookPrefs
     fun openChats(): com.cherry.butler.core.background.OpenChatRequests

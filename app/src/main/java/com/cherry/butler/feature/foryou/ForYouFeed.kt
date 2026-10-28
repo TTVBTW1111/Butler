@@ -297,14 +297,13 @@ private fun Portrait(url: String?, obscured: Boolean, chats: Long, onClick: () -
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(460.dp)
+            .height(560.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(ButlerTheme.colors.surfaceHigh)
             .clickable(onClick = onClick),
     ) {
-        if (url != null) {
-            AsyncImage(model = request, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        }
+        // The whole picture, never cropped: the frame around it is a soft blur of it.
+        if (url != null) com.cherry.butler.ui.components.FittedPicture(request, com.cherry.butler.core.design.PictureFit.Whole, Modifier.fillMaxSize())
         Row(
             modifier = Modifier
                 .align(Alignment.BottomEnd)

@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -69,7 +70,9 @@ object TileGrid {
 
     /** Below this width a grid is a phone's two-up; above it, as many tiles as fit this wide. */
     private val twoUpUntil = 600.dp
-    private val widestTile = 196.dp
+    /** Fork: the card size from the look settings (Butler's own is 196). */
+    private val widestTile: Dp
+        @Composable get() = com.cherry.butler.core.design.LocalForkLook.current.tileSize.widest
 
     /** How many tiles a row holds here: two on a phone, more on a wider window. */
     @Composable
@@ -103,8 +106,16 @@ private object TileArrivals {
     fun first(key: String): Boolean = seen.put(key, Unit) == null
 }
 
-/** Portrait height for a tile of [width]: a touch taller than square, as Janitor's are. */
-private fun portraitHeight(width: Dp): Dp = width * 1.08f
+/** Portrait height for a tile of [width]: a touch taller than square, as Janitor's are (fork: or the shape picked). */
+@Composable
+private fun portraitHeight(width: Dp): Dp = width * com.cherry.butler.core.design.LocalForkLook.current.tileShape.ratio
+
+/** Fork: the CDN crop to ask for, or null for the whole picture (cropped, or fitted, here instead). */
+@Composable
+private fun portraitAspect(): String? {
+    val look = com.cherry.butler.core.design.LocalForkLook.current
+    return if (look.pictureFit == com.cherry.butler.core.design.PictureFit.Fill) look.tileShape.wire else null
+}
 
 /** The same shape as the CDN's crop parameter (25:27 is 1.08). */
 private const val PORTRAIT_ASPECT = "25:27"
@@ -245,20 +256,43 @@ private fun TilePortrait(url: String?, name: String, width: Dp, height: Dp, obsc
     val density = LocalDensity.current
     val wPx = with(density) { width.roundToPx() }
     val hPx = with(density) { height.roundToPx() }
-    val request = remember(url, wPx, hPx, obscured) { tilePortraitRequest(context, url, wPx, hPx, obscured) }
+    val aspect = portraitAspect()
+    val fit = com.cherry.butler.core.design.LocalForkLook.current.pictureFit
+    val request = remember(url, wPx, hPx, obscured, aspect) { tilePortraitRequest(context, url, wPx, hPx, obscured, aspect) }
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = name.firstOrNull()?.uppercase().orEmpty(),
             style = MaterialTheme.typography.headlineMedium,
             color = ButlerTheme.colors.textLow,
         )
-        if (url != null) {
+        if (url != null) FittedPicture(request, fit, Modifier.fillMaxSize())
+    }
+}
+
+/**
+ * Fork: a picture in its frame, as the look settings say: cropped to it (as Butler always
+ * did), cropped from the top, or whole, over a soft blur of itself so the frame isn't empty.
+ */
+@Composable
+fun FittedPicture(request: ImageRequest, fit: com.cherry.butler.core.design.PictureFit, modifier: Modifier = Modifier) {
+    when (fit) {
+        com.cherry.butler.core.design.PictureFit.Fill -> AsyncImage(
+            model = request, contentDescription = null, contentScale = ContentScale.Crop,
+            filterQuality = FilterQuality.Low, modifier = modifier,
+        )
+        com.cherry.butler.core.design.PictureFit.Top -> AsyncImage(
+            model = request, contentDescription = null, contentScale = ContentScale.Crop,
+            alignment = Alignment.TopCenter, filterQuality = FilterQuality.Low, modifier = modifier,
+        )
+        com.cherry.butler.core.design.PictureFit.Whole -> Box(modifier) {
             AsyncImage(
-                model = request,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+                model = request, contentDescription = null, contentScale = ContentScale.Crop,
                 filterQuality = FilterQuality.Low,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().blur(18.dp).graphicsLayer { alpha = 0.55f },
+            )
+            AsyncImage(
+                model = request, contentDescription = null, contentScale = ContentScale.Fit,
+                filterQuality = FilterQuality.Low, modifier = Modifier.fillMaxSize(),
             )
         }
     }
@@ -270,11 +304,11 @@ private const val OBSCURED_PX = 10
  * The one request a tile's picture is loaded with. [PrefetchTilePortraits] builds the same,
  * so a picture fetched ahead sits in memory under exactly the key the tile will ask for.
  */
-fun tilePortraitRequest(context: android.content.Context, url: String?, wPx: Int, hPx: Int, obscured: Boolean): ImageRequest =
+fun tilePortraitRequest(context: android.content.Context, url: String?, wPx: Int, hPx: Int, obscured: Boolean, aspect: String? = PORTRAIT_ASPECT): ImageRequest =
     ImageRequest.Builder(context)
-        .data(com.cherry.butler.core.config.JanitorConfig.sizedMediaUrl(url, if (obscured) OBSCURED_PX else wPx, PORTRAIT_ASPECT))
+        .data(com.cherry.butler.core.config.JanitorConfig.sizedMediaUrl(url, if (obscured) OBSCURED_PX else wPx, aspect))
         .size(if (obscured) Size(OBSCURED_PX, OBSCURED_PX) else Size(wPx, hPx))
-        .memoryCacheKey(if (obscured) "$url@obscured" else "$url@${wPx}x$hPx")
+        .memoryCacheKey(if (obscured) "$url@obscured" else "$url@${wPx}x$hPx@${aspect ?: "whole"}")
         .allowHardware(true)
         .build()
 
@@ -294,6 +328,7 @@ fun PrefetchTilePortraits(
     val density = LocalDensity.current
     val wPx = with(density) { width.roundToPx() }
     val hPx = with(density) { portraitHeight(width).roundToPx() }
+    val aspect = portraitAspect()
     val ahead = TileGrid.columns() * AHEAD_ROWS
     // Bounded: the catalogue pages on without end. A key dropped here at worst asks the
     // loader again, which answers from its cache.
@@ -302,7 +337,7 @@ fun PrefetchTilePortraits(
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Unit>?) = size > ASKED_MAX
         }
     }
-    androidx.compose.runtime.LaunchedEffect(state, count, wPx, hPx, ahead) {
+    androidx.compose.runtime.LaunchedEffect(state, count, wPx, hPx, ahead, aspect) {
         androidx.compose.runtime.snapshotFlow { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .collect { last ->
                 if (last < 0) return@collect
@@ -310,7 +345,7 @@ fun PrefetchTilePortraits(
                 for (i in (last + 1)..minOf(last + ahead, count - 1)) {
                     val (url, obscured) = portraitAt(i) ?: continue
                     if (url == null || asked.put("$url@$obscured", Unit) != null) continue
-                    loader.enqueue(tilePortraitRequest(context, url, wPx, hPx, obscured))
+                    loader.enqueue(tilePortraitRequest(context, url, wPx, hPx, obscured, aspect))
                 }
             }
     }

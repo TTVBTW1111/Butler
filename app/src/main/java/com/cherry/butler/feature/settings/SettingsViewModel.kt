@@ -41,6 +41,7 @@ class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
     private val memory: MemoryPrefs,
     private val themes: ThemePrefs,
+    private val forkLookPrefs: com.cherry.butler.core.data.ForkLookPrefs,
     private val writerPrefs: com.cherry.butler.core.data.WriterPrefs,
     private val richTyping: com.cherry.butler.core.data.RichTypingPrefs,
     private val addons: com.cherry.butler.core.generation.PromptAddons,
@@ -317,6 +318,20 @@ class SettingsViewModel @Inject constructor(
     /** What the Custom look is made from. */
     val custom: StateFlow<com.cherry.butler.core.design.CustomColors> = themes.custom
     fun setCustom(colors: com.cherry.butler.core.design.CustomColors) = themes.setCustom(colors)
+
+    // ---- ricing (fork) ----
+    val forkLook: StateFlow<com.cherry.butler.core.design.ForkLook> = forkLookPrefs.look
+    fun setTileSize(v: com.cherry.butler.core.design.TileSize) = forkLookPrefs.setTileSize(v)
+    fun setTileShape(v: com.cherry.butler.core.design.TileShape) = forkLookPrefs.setTileShape(v)
+    fun setPictureFit(v: com.cherry.butler.core.design.PictureFit) = forkLookPrefs.setPictureFit(v)
+    fun setBrowseWidth(v: com.cherry.butler.core.design.BrowseWidth) = forkLookPrefs.setBrowseWidth(v)
+    fun resetForkLook() = forkLookPrefs.reset()
+
+    /** A rice preset: its colours become the Custom look, and the Custom look is put on. */
+    fun applyPreset(p: com.cherry.butler.core.design.RicePreset) {
+        themes.setCustom(p.colors)
+        themes.set(AppTheme.Custom)
+    }
 
     val recentColors: StateFlow<List<Long>> = themes.recentColors
     fun addRecent(argb: Long) = themes.addRecent(argb)

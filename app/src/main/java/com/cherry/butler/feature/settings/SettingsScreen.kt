@@ -1027,6 +1027,15 @@ private fun LookSection(viewModel: SettingsViewModel, onOpenCustomize: () -> Uni
         if (current == AppTheme.Custom) {
             Branch { LinkRow(title = "Custom colours", subtitle = null, onClick = { customizing = true }, icon = Icons.Rounded.Palette) }
         }
+        // Fork: one-tap rices; they fill the Custom look, so every colour stays editable.
+        val presetName = com.cherry.butler.core.design.RicePresets.all.firstOrNull { current == AppTheme.Custom && it.colors == custom }?.name
+        DropRow(title = "Rice presets", value = presetName ?: "None", icon = Icons.Rounded.Palette) { close ->
+            com.cherry.butler.core.design.RicePresets.all.forEach { p ->
+                DropItem(title = p.name, subtitle = p.blurb, selected = p.name == presetName, onClick = { close(); viewModel.applyPreset(p) })
+            }
+        }
+        RowDivider()
+        ForkLayoutRows(viewModel)
         RowDivider()
         DropRow(title = "Chat layout", value = chatStyle.label, icon = Icons.Rounded.ViewAgenda) { close ->
             ChatStyle.entries.forEach { style ->
@@ -2037,5 +2046,41 @@ private fun DebugSection() {
                 onStopAsking = {},
             )
         }
+    }
+}
+
+
+/** Fork: the layout of cards (and of Browse on the PC). Butler's own look is the default of each. */
+@Composable
+private fun ForkLayoutRows(viewModel: SettingsViewModel) {
+    val look by viewModel.forkLook.collectAsStateWithLifecycle()
+    DropRow(title = "Card size", value = look.tileSize.label, icon = Icons.Rounded.ViewAgenda) { close ->
+        com.cherry.butler.core.design.TileSize.entries.forEach { v ->
+            DropItem(title = v.label, subtitle = if (v == com.cherry.butler.core.design.TileSize.Medium) "Butler's own" else null, selected = v == look.tileSize, onClick = { close(); viewModel.setTileSize(v) })
+        }
+    }
+    DropRow(title = "Card shape", value = look.tileShape.label, icon = Icons.Rounded.ViewAgenda) { close ->
+        com.cherry.butler.core.design.TileShape.entries.forEach { v ->
+            DropItem(title = v.label, subtitle = when (v) {
+                com.cherry.butler.core.design.TileShape.Classic -> "A touch taller than square, as Janitor's"
+                com.cherry.butler.core.design.TileShape.Tall -> "Portrait: more of the picture shows"
+                com.cherry.butler.core.design.TileShape.Square -> "Square, more cards on screen"
+            }, selected = v == look.tileShape, onClick = { close(); viewModel.setTileShape(v) })
+        }
+    }
+    DropRow(title = "Pictures", value = look.pictureFit.label, icon = Icons.Rounded.ViewAgenda) { close ->
+        com.cherry.butler.core.design.PictureFit.entries.forEach { v ->
+            DropItem(title = v.label, subtitle = v.blurb, selected = v == look.pictureFit, onClick = { close(); viewModel.setPictureFit(v) })
+        }
+    }
+    if (com.cherry.butler.core.platform.Device.NAME == "PC") {
+        DropRow(title = "Browse width", value = look.browseWidth.label, icon = Icons.Rounded.ViewList) { close ->
+            com.cherry.butler.core.design.BrowseWidth.entries.forEach { v ->
+                DropItem(title = v.label, subtitle = if (v == com.cherry.butler.core.design.BrowseWidth.Classic) "Butler's own" else null, selected = v == look.browseWidth, onClick = { close(); viewModel.setBrowseWidth(v) })
+            }
+        }
+    }
+    if (look != com.cherry.butler.core.design.ForkLook()) {
+        LinkRow(title = "Back to Butler's layout", subtitle = null, onClick = viewModel::resetForkLook, icon = Icons.Rounded.ViewAgenda)
     }
 }

@@ -105,6 +105,8 @@ fun ButlerTheme(
     chatLetterSpacing: Int = 0,
     thinkingLook: ThinkingLook = ThinkingLook.Butler,
     thoughtLook: ThoughtLook = ThoughtLook.Stripe,
+    /** Fork: the ricing settings; the default is Butler's own look. */
+    fork: ForkLook = ForkLook(),
     content: @Composable () -> Unit,
 ) {
     val typography = androidx.compose.runtime.remember(appFont, chatFont, appTextScale, appLetterSpacing, chatLetterSpacing) {
@@ -131,6 +133,7 @@ fun ButlerTheme(
         LocalChatLetterSpacing provides chatLetterSpacing,
         LocalThinkingLook provides thinkingLook,
         LocalThoughtLook provides thoughtLook,
+        LocalForkLook provides fork,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

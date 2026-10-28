@@ -46,6 +46,8 @@ class MainActivity : FragmentActivity() {
     lateinit var fontPrefs: com.cherry.butler.core.data.FontPrefs
     @Inject
     lateinit var themePrefs: ThemePrefs
+    @Inject
+    lateinit var forkLook: com.cherry.butler.core.data.ForkLookPrefs
 
     @Inject
     lateinit var lastPlace: LastPlace
@@ -103,6 +105,7 @@ class MainActivity : FragmentActivity() {
             val thoughtLook by themePrefs.thoughtLook.collectAsState()
             val look by textLook.look.collectAsState()
             val custom by themePrefs.custom.collectAsState()
+            val fork by forkLook.look.collectAsState()
             val chatFontKey by fontPrefs.chat.collectAsState()
             val appFontKey by fontPrefs.app.collectAsState()
             val appTextScale by fontPrefs.appScale.collectAsState()
@@ -125,7 +128,7 @@ class MainActivity : FragmentActivity() {
             LaunchedEffect(lockOn) {
                 if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!lockOn)
             }
-            ButlerTheme(theme = theme, chatStyle = chatStyle, look = look, custom = custom, appFont = appFont, chatFont = chatFont, appTextScale = appTextScale, appLetterSpacing = fontSpacing[appFontKey] ?: 0, chatLetterSpacing = fontSpacing[chatFontKey] ?: 0, thinkingLook = thinkingLook, thoughtLook = thoughtLook) {
+            ButlerTheme(theme = theme, chatStyle = chatStyle, look = look, custom = custom, appFont = appFont, chatFont = chatFont, appTextScale = appTextScale, appLetterSpacing = fontSpacing[appFontKey] ?: 0, chatLetterSpacing = fontSpacing[chatFontKey] ?: 0, thinkingLook = thinkingLook, thoughtLook = thoughtLook, fork = fork) {
                 androidx.compose.foundation.layout.Box {
                     // Kept composed under the lock so the user returns exactly where they were,
                     // but hidden from accessibility while covered.

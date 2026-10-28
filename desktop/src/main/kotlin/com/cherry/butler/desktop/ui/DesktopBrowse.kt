@@ -113,7 +113,9 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
     // that takes 26 s to cross 8 px cells looks the same at 12.
     val pointer = remember { PointerTrack() }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().trackPointer(pointer).wheelScrolls(viewModel.gridState)) {
-    val column = minOf(maxWidth, BrowseColumn)
+    // Fork: the look settings may ask for six across, or the whole window.
+    val look = com.cherry.butler.core.design.LocalForkLook.current
+    val column = look.browseWidth.columns?.let { n -> minOf(maxWidth, look.tileSize.widest * n + 10.dp * (n - 1) + 12.dp * 2 + 2.dp) } ?: maxWidth
     if (maxWidth > column + 48.dp) {
         DitherField(pointer, column, Modifier.fillMaxSize(), DitherShape.Column, driftFps = 12)
     }
