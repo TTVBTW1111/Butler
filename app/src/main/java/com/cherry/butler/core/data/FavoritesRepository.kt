@@ -24,7 +24,21 @@ import javax.inject.Singleton
 class FavoritesRepository @Inject constructor(
     private val characters: CharacterRemoteSource,
     private val community: CommunityRemoteSource,
+    @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
 ) {
+    /** When you hearted each character in Butler (Janitor doesn't seem to say): id → millis. */
+    private val hearted = context.getSharedPreferences("fork_favorites", android.content.Context.MODE_PRIVATE)
+
+    /** Your whole favourites list with dates, for the Favorites sort (read with the ids). */
+    private val _entries = MutableStateFlow<List<com.cherry.butler.core.model.FavoriteEntry>>(emptyList())
+    val entries: StateFlow<List<com.cherry.butler.core.model.FavoriteEntry>> = _entries.asStateFlow()
+    private val _reading = MutableStateFlow(false)
+    val reading: StateFlow<Boolean> = _reading.asStateFlow()
+    @Volatile private var stale = false
+
+    /** Reads the list again if a heart changed since (the sorted Favorites view asks). */
+    suspend fun freshEntries() { if (stale || !_known.value) ensureLoaded(force = true) }
+
     private val _ids = MutableStateFlow<Set<String>>(emptySet())
     val ids: StateFlow<Set<String>> = _ids.asStateFlow()
 
@@ -44,17 +58,30 @@ class FavoritesRepository @Inject constructor(
         if (_known.value && !force) return@withLock
         synchronized(changedDuringRead) { changedDuringRead.clear() }
         val found = HashSet<String>()
+        val rows = ArrayList<com.cherry.butler.core.model.FavoriteEntry>()
+        _reading.value = true
+        stale = false
         runCatching {
             val query = BrowseQuery(source = BrowseSource.Favorites, special = null)
             for (page in 1..MAX_PAGES) {
-                val rows = characters.browse(query, page).data
-                rows.forEach { found += it.id }
-                if (rows.size < CharacterRemoteSource.PAGE_SIZE) break
+                val got = characters.browse(query, page).data
+                got.forEach { dto ->
+                    if (found.add(dto.id)) rows += com.cherry.butler.core.model.FavoriteEntry(
+                        character = dto.toCharacter(),
+                        position = rows.size,
+                        favoritedAt = com.cherry.butler.core.util.IsoTime.parseMillis(dto.favoritedAt ?: dto.favoriteCreatedAt)
+                            ?: hearted.getLong(dto.id, 0L).takeIf { it > 0 },
+                        createdAt = com.cherry.butler.core.util.IsoTime.parseMillis(dto.firstPublishedAt ?: dto.createdAt),
+                    )
+                }
+                if (got.size < CharacterRemoteSource.PAGE_SIZE) break
             }
         }.onSuccess {
             val taps = synchronized(changedDuringRead) { HashMap(changedDuringRead) }
             _ids.value = found.apply { taps.forEach { (id, on) -> if (on) add(id) else remove(id) } }
+            _entries.value = rows.filter { it.character.id in _ids.value }
         }
+        _reading.value = false
         _known.value = true
     }
 
@@ -62,6 +89,11 @@ class FavoritesRepository @Inject constructor(
 
     /** Records what another screen learned (the character page asks Janitor directly). */
     fun mark(characterId: String, on: Boolean) {
+        if (on != (characterId in _ids.value)) {
+            stale = true
+            if (on) hearted.edit().putLong(characterId, System.currentTimeMillis()).apply()
+            else { hearted.edit().remove(characterId).apply(); _entries.update { list -> list.filterNot { it.character.id == characterId } } }
+        }
         _ids.update { if (on) it + characterId else it - characterId }
         synchronized(changedDuringRead) { changedDuringRead[characterId] = on }
     }

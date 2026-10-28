@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Diamond
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -177,6 +178,7 @@ fun BrowseScreen(
                 favorites = favoriteIds,
                 onFavorite = viewModel::toggleFavorite,
                 notice = favoriteError,
+                onGoTo = viewModel::goToPage,
             )
         } else {
             CharacterRoster(
@@ -595,6 +597,10 @@ internal fun PagedRoster(
     favorites: Set<String>? = null,
     onFavorite: ((String) -> Unit)? = null,
     notice: String? = null,
+    /** Fork: jump to a page by its number; null keeps Butler's Previous / Next only. */
+    onGoTo: ((Int) -> Unit)? = null,
+    /** Fork: no pager at all (the sorted Favorites list with endless scroll is one page). */
+    showPager: Boolean = true,
 ) {
     val tileWidth = TileGrid.tileWidth()
     LaunchedEffect(page.number, page.loading) { if (!page.loading) gridState.scrollToItem(0) }
@@ -621,8 +627,8 @@ internal fun PagedRoster(
                         onFavorite = onFavorite?.let { f -> { f(character.id) } },
                     ) { onCharacterClick(character.id) }
                 }
-                item(span = { GridItemSpan(maxLineSpan) }, contentType = "pager") {
-                    Row(
+                if (showPager) item(span = { GridItemSpan(maxLineSpan) }, contentType = "pager") {
+                    if (onGoTo != null) PageNumbers(page, onPrevious, onNext, onGoTo) else Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -690,4 +696,85 @@ internal fun EmptyState(hasSearch: Boolean) {
             "No characters came back for these filters."
         },
     )
+}
+
+
+/**
+ * Fork: Previous, the page numbers around this one (and the first and furthest known), Next,
+ * and a box to type a page to jump to. Janitor never says how many pages a list has, so the
+ * numbers reach as far as you've been, or one past this page while there's more.
+ */
+@Composable
+internal fun PageNumbers(page: BrowseViewModel.Page, onPrevious: () -> Unit, onNext: () -> Unit, onGoTo: (Int) -> Unit) {
+    val last = page.total ?: maxOf(page.furthest, if (page.hasMore) page.number + 1 else page.number)
+    val shown = PageWindow.numbers(page.number, last)
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.cherry.butler.feature.chats.KeyButton(label = "‹ Previous", onClick = onPrevious, enabled = page.number > 1)
+            var before = 0
+            shown.forEach { n ->
+                if (before != 0 && n > before + 1) Text("…", color = ButlerTheme.colors.textLow)
+                before = n
+                val here = n == page.number
+                Box(
+                    modifier = Modifier
+                        .sizeIn(minWidth = 36.dp, minHeight = 36.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .background(if (here) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .border(1.dp, if (here) Color.Transparent else ButlerTheme.colors.rule, MaterialTheme.shapes.medium)
+                        .clickable(enabled = !here) { onGoTo(n) }
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        n.toString(),
+                        style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                        color = if (here) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+            if (page.total == null && page.hasMore && last == page.number + 1) Text("…", color = ButlerTheme.colors.textLow)
+            com.cherry.butler.feature.chats.KeyButton(label = "Next ›", onClick = onNext, enabled = page.hasMore, primary = page.hasMore)
+        }
+        var typed by remember(page.number) { mutableStateOf("") }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (page.total != null) "Page ${page.number} of ${page.total}" else "Page ${page.number}",
+                style = MaterialTheme.typography.labelMedium,
+                color = ButlerTheme.colors.textMed,
+            )
+            androidx.compose.foundation.text.BasicTextField(
+                value = typed,
+                onValueChange = { v -> typed = v.filter { it.isDigit() }.take(4) },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.labelLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Go,
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = {
+                    typed.toIntOrNull()?.let { n -> onGoTo(page.total?.let { n.coerceIn(1, it) } ?: n.coerceAtLeast(1)) }
+                }),
+                decorationBox = { inner ->
+                    Box(
+                        Modifier.width(72.dp).border(1.dp, ButlerTheme.colors.rule, MaterialTheme.shapes.small).padding(horizontal = 8.dp, vertical = 6.dp),
+                    ) {
+                        if (typed.isEmpty()) Text("Go to…", style = MaterialTheme.typography.labelMedium, color = ButlerTheme.colors.textLow)
+                        inner()
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** Which page numbers to offer: the first, two either side of [current], and [last]. */
+object PageWindow {
+    fun numbers(current: Int, last: Int): List<Int> =
+        (listOf(1, last) + ((current - 2)..(current + 2))).filter { it in 1..last }.distinct().sorted()
 }

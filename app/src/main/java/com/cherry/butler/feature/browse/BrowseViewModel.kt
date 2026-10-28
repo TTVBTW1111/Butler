@@ -101,7 +101,49 @@ class BrowseViewModel @Inject constructor(
         val loading: Boolean = true,
         val error: Throwable? = null,
         val hasMore: Boolean = false,
+        /** Fork: how many pages there are, when that's known (the sorted Favorites list). */
+        val total: Int? = null,
+        /** Fork: the furthest page seen so far, so the numbers can offer it. */
+        val furthest: Int = number,
     )
+
+    /** Fork: the Pages / Scroll switch on Browse itself (same setting as Settings › Look). */
+    fun setPaged(on: Boolean) = browsePrefs.setPaged(on)
+
+    /** Fork: the Favorites order. Anything but Janitor's is sorted here, from the whole list. */
+    val favoriteOrder: StateFlow<com.cherry.butler.core.model.FavoriteOrder> = browsePrefs.favoriteOrder
+    fun setFavoriteOrder(order: com.cherry.butler.core.model.FavoriteOrder) {
+        browsePrefs.setFavoriteOrder(order)
+        _favPage.value = 1
+    }
+    private val _favPage = MutableStateFlow(1)
+
+    /** The sorted Favorites list as a page (all of it in one, with endless scroll), or null when not in use. */
+    val favoriteView: StateFlow<Page?> by lazy {
+        combine(_query, favoriteOrder, favorites.entries, favorites.reading, combine(_favPage, paged) { a, b -> a to b }) { q, order, entries, reading, (pageNo, pagedOn) ->
+            if (q.source != BrowseSource.Favorites || order == com.cherry.butler.core.model.FavoriteOrder.Janitor) return@combine null
+            val chosenTags = _tags.value.filter { it.id in q.tagIds }.map { it.name.lowercase() }
+            val words = q.search?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
+            val kept = com.cherry.butler.core.model.FavoriteSorting.sort(entries, order).map { it.character }.filter { c ->
+                (words == null || c.name.lowercase().contains(words) || c.creatorName.lowercase().contains(words)) &&
+                    chosenTags.all { t -> c.tagNames.any { it.lowercase() == t } } &&
+                    q.customTags.all { t -> t in c.customTags } &&
+                    (q.mode != com.cherry.butler.core.model.NsfwMode.Sfw || !c.isNsfw) &&
+                    c.messageCount >= q.minMessages && c.totalTokens >= q.minTokens && (!q.proxyOnly || c.isProxyEnabled)
+            }
+            if (reading && entries.isEmpty()) return@combine Page(loading = true)
+            if (!pagedOn) return@combine Page(number = 1, items = kept, loading = false, total = 1)
+            val total = maxOf(1, (kept.size + FAV_PAGE - 1) / FAV_PAGE)
+            val n = pageNo.coerceIn(1, total)
+            Page(number = n, items = kept.drop((n - 1) * FAV_PAGE).take(FAV_PAGE), loading = false, hasMore = n < total, total = total, furthest = total)
+        }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), null)
+    }
+
+    fun favoritePage(n: Int) { _favPage.value = n.coerceAtLeast(1) }
+    fun refreshFavorites() { viewModelScope.launch { favorites.freshEntries() } }
+
+    /** Jump straight to a page (the numbers under the grid, or "Go to"). */
+    fun goToPage(n: Int) { if (n >= 1 && !_page.value.loading) loadPage(n) }
 
     private val _page = MutableStateFlow(Page())
     val page: StateFlow<Page> = _page.asStateFlow()
@@ -116,7 +158,8 @@ class BrowseViewModel @Inject constructor(
         val query = pageQuery ?: _query.value.server()
         pageJob?.cancel()
         pageJob = viewModelScope.launch {
-            _page.value = Page(number = number, loading = true)
+            val furthest = if (pageQuery == query) maxOf(_page.value.furthest, number) else number
+            _page.value = Page(number = number, loading = true, furthest = furthest)
             val result = runCatching { repository.page(query, number) }
             val filters = _query.value
             _page.value = result.fold(
@@ -124,9 +167,9 @@ class BrowseViewModel @Inject constructor(
                     val kept = items.filter {
                         it.messageCount >= filters.minMessages && it.totalTokens >= filters.minTokens && (!filters.proxyOnly || it.isProxyEnabled)
                     }
-                    Page(number = number, items = kept, loading = false, hasMore = more)
+                    Page(number = number, items = kept, loading = false, hasMore = more, furthest = if (more) maxOf(furthest, number + 1) else number)
                 },
-                onFailure = { Page(number = number, loading = false, error = it) },
+                onFailure = { Page(number = number, loading = false, error = it, furthest = furthest) },
             )
         }
     }
@@ -184,6 +227,7 @@ class BrowseViewModel @Inject constructor(
                 _query.map { it.server() }.debounce { if (it.search.isNullOrBlank()) 0L else SEARCH_DEBOUNCE_MS }.distinctUntilChanged(),
                 paged,
             ) { q, on -> q to on }.collect { (q, on) ->
+                if (pageQuery != q) _page.value = Page()
                 pageQuery = q
                 if (on) loadPage(1)
             }
@@ -261,6 +305,8 @@ class BrowseViewModel @Inject constructor(
 
     companion object {
         private const val SEARCH_DEBOUNCE_MS = 350L
+        /** The sorted Favorites list, a page at a time. */
+        private const val FAV_PAGE = 36
         /** `tag_id[] must contain no more than 53 elements` — server-enforced. */
         private const val MAX_TAGS = 53
         /** A guard, not Janitor's limit (none seen): past a few, nothing matches anyway. */

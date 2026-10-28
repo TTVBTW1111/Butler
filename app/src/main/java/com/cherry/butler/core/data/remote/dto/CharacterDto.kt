@@ -65,6 +65,9 @@ data class CharacterDto(
 
     @SerialName("scheduled_publish_at") val scheduledPublishAt: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    /** Fork: when you favourited it, if the Favorites list says (not confirmed it ever does). */
+    @SerialName("favorited_at") val favoritedAt: String? = null,
+    @SerialName("favorite_created_at") val favoriteCreatedAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     /** Note: no timezone suffix, unlike the other two. */
     @SerialName("first_published_at") val firstPublishedAt: String? = null,

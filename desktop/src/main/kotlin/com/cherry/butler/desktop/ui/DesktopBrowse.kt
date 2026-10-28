@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.rounded.FormatListNumbered
+import androidx.compose.material.icons.rounded.ViewDay
+import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -138,6 +142,15 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
             )
             Spacer(Modifier.width(8.dp))
             FilterKey(active = query.filterCount, onClick = { showFilters = true })
+            // Fork: pages or the endless scroll, right here (also Settings › Look › Home list).
+            val pagedNow by viewModel.paged.collectAsStateWithLifecycle()
+                androidx.compose.material3.IconButton(onClick = { viewModel.setPaged(!pagedNow) }, modifier = Modifier.size(48.dp)) {
+                    androidx.compose.material3.Icon(
+                        if (pagedNow) androidx.compose.material.icons.Icons.Rounded.FormatListNumbered else androidx.compose.material.icons.Icons.Rounded.ViewDay,
+                        contentDescription = if (pagedNow) "Pages" else "Endless scroll",
+                        tint = if (pagedNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             }
         }
         if (forYou) {
@@ -158,6 +171,29 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
                 onSource = { picked -> viewModel.onSourceSelected(if (query.source == picked) BrowseSource.All else picked) },
             )
         }
+        // Fork: the Favorites order, while Favorites is on.
+        val favoriteOrder by viewModel.favoriteOrder.collectAsStateWithLifecycle()
+        if (query.source == BrowseSource.Favorites) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Order", style = MaterialTheme.typography.labelLarge, color = ButlerTheme.colors.textMed)
+                Spacer(Modifier.width(10.dp))
+                Row(Modifier.border(1.dp, ButlerTheme.colors.rule, MaterialTheme.shapes.medium).padding(3.dp)) {
+                    val orders = com.cherry.butler.core.model.FavoriteOrder.entries
+                    com.cherry.butler.feature.browse.DropSegment(
+                        label = favoriteOrder.label,
+                        icon = androidx.compose.material.icons.Icons.Rounded.SwapVert,
+                        selected = favoriteOrder != com.cherry.butler.core.model.FavoriteOrder.Janitor,
+                        options = orders.map { it.label },
+                        chosen = orders.indexOf(favoriteOrder),
+                        onPick = { viewModel.setFavoriteOrder(orders[it]) },
+                        modifier = Modifier.width(IntrinsicSize.Max).widthIn(min = 200.dp),
+                    )
+                }
+            }
+        }
         val tagRow = rememberLazyListState()
         TagStrip(
             source = query.source,
@@ -176,8 +212,27 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
         val paged by viewModel.paged.collectAsStateWithLifecycle()
         val favoriteIds = viewModel.favoriteIdsOrNull.collectAsStateWithLifecycle().value
         val favoriteError = viewModel.favoriteError.collectAsStateWithLifecycle().value
+        val favoriteView by viewModel.favoriteView.collectAsStateWithLifecycle()
+        val sortingFavorites = favoriteView != null
+        LaunchedEffect(sortingFavorites) { if (sortingFavorites) viewModel.refreshFavorites() }
         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
-        if (paged) {
+        val favPage = favoriteView
+        if (favPage != null) {
+            PagedRoster(
+                page = favPage,
+                hasSearch = !query.search.isNullOrBlank(),
+                gridState = viewModel.gridState,
+                onPrevious = { viewModel.favoritePage(favPage.number - 1) },
+                onNext = { viewModel.favoritePage(favPage.number + 1) },
+                onRetry = viewModel::refreshFavorites,
+                onCharacterClick = onCharacterClick,
+                favorites = favoriteIds,
+                onFavorite = viewModel::toggleFavorite,
+                notice = favoriteError,
+                onGoTo = viewModel::favoritePage,
+                showPager = paged,
+            )
+        } else if (paged) {
             val page by viewModel.page.collectAsStateWithLifecycle()
             PagedRoster(
                 page = page,
@@ -190,6 +245,7 @@ fun DesktopBrowse(onCharacterClick: (String) -> Unit, viewModel: BrowseViewModel
                 favorites = favoriteIds,
                 onFavorite = viewModel::toggleFavorite,
                 notice = favoriteError,
+                onGoTo = viewModel::goToPage,
             )
         } else {
             CharacterRoster(
