@@ -1,5 +1,10 @@
 package com.cherry.butler.feature.browse
 
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.ViewDay
+import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.foundation.layout.heightIn
 import com.cherry.butler.ui.components.SearchBox
 import androidx.compose.runtime.LaunchedEffect
@@ -131,6 +136,17 @@ fun BrowseScreen(
     val letGo = com.cherry.butler.ui.components.rememberLetGoOfField(focusManager)
 
     Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+        // Fork: Browse or For You, as on the PC.
+        val forYou by viewModel.forYou.collectAsStateWithLifecycle()
+        com.cherry.butler.feature.foryou.BrowseForYouSwitch(
+            forYou = forYou,
+            onPick = viewModel::setForYou,
+            modifier = Modifier.padding(start = 16.dp, top = 10.dp),
+        )
+        if (forYou) {
+            com.cherry.butler.feature.foryou.ForYouFeed(onOpenCharacter = onCharacterClick, modifier = Modifier.fillMaxSize().padding(top = 8.dp))
+            return@Column
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -143,6 +159,15 @@ fun BrowseScreen(
                 modifier = Modifier.weight(1f),
             )
             FilterKey(active = query.filterCount, onClick = { showFilters = true })
+            // Fork: pages or the endless scroll, right here.
+            val pagedNow by viewModel.paged.collectAsStateWithLifecycle()
+            IconButton(onClick = { viewModel.setPaged(!pagedNow) }, modifier = Modifier.size(44.dp)) {
+                Icon(
+                    if (pagedNow) Icons.Rounded.FormatListNumbered else Icons.Rounded.ViewDay,
+                    contentDescription = if (pagedNow) "Pages, switch to endless scroll" else "Endless scroll, switch to pages",
+                    tint = if (pagedNow) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
         ModeBar(
             sort = query.sort,
@@ -161,10 +186,49 @@ fun BrowseScreen(
             onRemoveCustom = viewModel::onCustomTagRemoved,
             onAddCustom = viewModel::onCustomTagAdded,
         )
+        // Fork: the Favorites order, while Favorites is on.
+        val favoriteOrder by viewModel.favoriteOrder.collectAsStateWithLifecycle()
+        if (query.source == BrowseSource.Favorites) {
+            Row(
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
+                    .border(1.dp, ButlerTheme.colors.rule, MaterialTheme.shapes.medium).padding(3.dp),
+            ) {
+                val orders = com.cherry.butler.core.model.FavoriteOrder.entries
+                DropSegment(
+                    label = "Order: " + favoriteOrder.short,
+                    icon = Icons.Rounded.SwapVert,
+                    selected = favoriteOrder != com.cherry.butler.core.model.FavoriteOrder.Janitor,
+                    options = orders.map { it.label },
+                    chosen = orders.indexOf(favoriteOrder),
+                    onPick = { viewModel.setFavoriteOrder(orders[it]) },
+                    modifier = Modifier.width(IntrinsicSize.Max).widthIn(min = 160.dp),
+                )
+            }
+        }
         val paged by viewModel.paged.collectAsStateWithLifecycle()
         val favoriteIds = viewModel.favoriteIdsOrNull.collectAsStateWithLifecycle().value
         val favoriteError = viewModel.favoriteError.collectAsStateWithLifecycle().value
-        if (paged) {
+        val favoriteView by viewModel.favoriteView.collectAsStateWithLifecycle()
+        val sortingFavorites = favoriteView != null
+        LaunchedEffect(sortingFavorites) { if (sortingFavorites) viewModel.refreshFavorites() }
+        val favPage = favoriteView
+        if (favPage != null) {
+            PagedRoster(
+                page = favPage,
+                hasSearch = !query.search.isNullOrBlank(),
+                gridState = viewModel.gridState,
+                onPrevious = { viewModel.favoritePage(favPage.number - 1) },
+                onNext = { viewModel.favoritePage(favPage.number + 1) },
+                onRetry = viewModel::refreshFavorites,
+                onCharacterClick = onCharacterClick,
+                letGo = letGo,
+                favorites = favoriteIds,
+                onFavorite = viewModel::toggleFavorite,
+                notice = favoriteError,
+                onGoTo = viewModel::favoritePage,
+                showPager = paged,
+            )
+        } else if (paged) {
             val page by viewModel.page.collectAsStateWithLifecycle()
             PagedRoster(
                 page = page,
@@ -538,7 +602,7 @@ internal fun CharacterRoster(
 
 /** A short line over the foot of the grid (fork): why a heart didn't stick. */
 @Composable
-private fun NoticeSlip(text: String, modifier: Modifier = Modifier) {
+internal fun NoticeSlip(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,

@@ -82,6 +82,8 @@ fun CreatorScreen(
     // Ctrl+R / F5 on the desktop.
     com.cherry.butler.ui.components.RegisterRefresh { viewModel.refresh() }
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
     val profile = state.profile
     val looks = state.looks
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -126,6 +128,9 @@ fun CreatorScreen(
         if (profile == null && state.profileError != null) {
             InlineErrorCard(state.profileError!!, onRetry = viewModel::loadProfile, modifier = Modifier.padding(16.dp))
             return@Column
+        }
+        notice?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = ButlerTheme.colors.danger, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(TileGrid.columns()),
@@ -175,6 +180,8 @@ fun CreatorScreen(
                         edgeColor = card.border.ink()?.takeIf { dark },
                         corner = card.radius?.dp,
                         nameColor = (look(Part.CardName).color ?: card.color).ink()?.takeIf { dark },
+                        favorite = c.id in favoriteIds,
+                        onFavorite = { viewModel.toggleFavorite(c.id) },
                     ) {
                         BrowseTileFooter(
                             creatorName = c.creatorName,
@@ -246,9 +253,8 @@ private fun Header(
                     color = followersLook.color.ink() ?: textColor.copy(alpha = 0.7f),
                 )
             }
-            if (following != null) {
-                KeyButton(if (following) "Following" else "Follow", onClick = onFollow, primary = !following)
-            }
+            // Fork: always there; "Follow" until Janitor (or your Following list) says otherwise.
+            KeyButton(if (following == true) "Following" else "Follow", onClick = onFollow, primary = following != true)
         }
         val bio = profile.aboutMe?.takeIf { RichHtml.toPlainText(it).isNotBlank() || it.contains("<img", ignoreCase = true) }
         if (bio != null) {

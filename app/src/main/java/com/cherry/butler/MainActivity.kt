@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.draw.blur
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.LaunchedEffect
@@ -130,6 +131,18 @@ class MainActivity : FragmentActivity() {
             }
             ButlerTheme(theme = theme, chatStyle = chatStyle, look = look, custom = custom, appFont = appFont, chatFont = chatFont, appTextScale = appTextScale, appLetterSpacing = fontSpacing[appFontKey] ?: 0, chatLetterSpacing = fontSpacing[chatFontKey] ?: 0, thinkingLook = thinkingLook, thoughtLook = thoughtLook, fork = fork) {
                 androidx.compose.foundation.layout.Box {
+                    // Fork: your wallpaper behind the whole app; glass in the theme lets it through.
+                    fork.wallpaper?.let { path ->
+                        com.cherry.butler.ui.components.Backdrop(
+                            dim = fork.wallpaperDim,
+                            parallax = false,
+                            file = java.io.File(path),
+                            fileKey = "fork-wallpaper-${fork.wallpaperKey}",
+                            modifier = androidx.compose.ui.Modifier.matchParentSize().then(
+                                if (fork.wallpaperBlur > 0f) androidx.compose.ui.Modifier.blur(androidx.compose.ui.unit.Dp(fork.wallpaperBlur)) else androidx.compose.ui.Modifier,
+                            ),
+                        )
+                    }
                     // Kept composed under the lock so the user returns exactly where they were,
                     // but hidden from accessibility while covered.
                     androidx.compose.foundation.layout.Box(

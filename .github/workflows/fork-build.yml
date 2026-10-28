@@ -60,3 +60,52 @@ jobs:
           name: Butler-windows-installer
           path: dist/*.msi
           retention-days: 30
+
+  android:
+    needs: compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # The fork's own key, when its secrets are set: each APK then installs over the last.
+      # Without them the runner's throwaway debug key signs it, and an update needs an uninstall.
+      - name: Signing key
+        env:
+          FORK_KEYSTORE_BASE64: ${{ secrets.FORK_KEYSTORE_BASE64 }}
+          FORK_KEYSTORE_PASSWORD: ${{ secrets.FORK_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$FORK_KEYSTORE_BASE64" ]; then
+            echo "$FORK_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fork.jks"
+            {
+              echo "BUTLER_KEYSTORE_PATH=$RUNNER_TEMP/fork.jks"
+              echo "BUTLER_KEYSTORE_PASSWORD=$FORK_KEYSTORE_PASSWORD"
+              echo "BUTLER_KEY_ALIAS=butlerfork"
+              echo "BUTLER_KEY_PASSWORD=$FORK_KEYSTORE_PASSWORD"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::warning::FORK_KEYSTORE_BASE64 isn't set: this APK is signed with a throwaway key."
+          fi
+      - name: Build the phone app
+        run: |
+          set -o pipefail
+          ./gradlew --no-configuration-cache :app:assembleFork 2>&1 | tee build.log
+      - name: Report errors
+        if: failure()
+        run: |
+          grep -E "^e: |error:|ERROR|FAILED|What went wrong|Missing class" -A2 build.log | head -60 | while IFS= read -r line; do
+            echo "::error::${line//%/%25}"
+          done
+      - name: Name it
+        run: |
+          mkdir dist
+          cp app/build/outputs/apk/fork/app-fork.apk "dist/Butler-fork-${GITHUB_SHA::7}.apk"
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Butler-android-apk
+          path: dist/*.apk
+          retention-days: 30

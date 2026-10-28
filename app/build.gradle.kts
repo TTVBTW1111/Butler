@@ -78,6 +78,17 @@ android {
                 "proguard-rules.pro",
             )
         }
+        // Fork: the phone build of TTVBTW1111's fork. Its own package (installs beside the
+        // official Butler), signed with the fork's key when CI has it (FORK_KEYSTORE_* secrets),
+        // else with the runner's debug key.
+        create("fork") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".fork"
+            versionNameSuffix = "-fork"
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+        }
         // What a user's phone actually runs — R8, shrunk resources, the AndroidX baseline
         // profiles, no debug checks — but signed with the debug key and sharing the debug
         // package, so it installs over the debug build and keeps the signed-in session.
@@ -94,6 +105,7 @@ android {
     sourceSets {
         // perf is a release build in all but signing: same no-op dev session sink.
         getByName("perf") { java.srcDirs("src/release/java") }
+        getByName("fork") { java.srcDirs("src/release/java") }
     }
 
     compileOptions {

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The fork's phone build sits beside the official Butler; this tells them apart. -->
+    <string name="app_name">Butler Fork</string>
+</resources>

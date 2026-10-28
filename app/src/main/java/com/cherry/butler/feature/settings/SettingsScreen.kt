@@ -2090,8 +2090,9 @@ private fun ForkLayoutRows(viewModel: SettingsViewModel) {
             DropItem(title = "Shown", subtitle = "Your latest chats under the sections", selected = look.dockRecents, onClick = { close(); viewModel.setDockRecents(true) })
             DropItem(title = "Hidden", subtitle = "Just the sections, a cleaner dock", selected = !look.dockRecents, onClick = { close(); viewModel.setDockRecents(false) })
         }
-        ForkWallpaperRows(viewModel, look)
     }
+    // Fork: the wallpaper and glass, on the phone too.
+    ForkWallpaperRows(viewModel, look)
     if (look != com.cherry.butler.core.design.ForkLook()) {
         LinkRow(title = "Back to Butler's layout", subtitle = "Card size, shape, pictures, width and wallpaper", onClick = viewModel::resetForkLook, icon = Icons.Rounded.ViewAgenda)
     }
@@ -2106,7 +2107,7 @@ private fun ForkWallpaperRows(viewModel: SettingsViewModel, look: com.cherry.but
     ) { uri -> if (uri != null) viewModel.setWallpaper(uri) }
     LinkRow(
         title = "Wallpaper",
-        subtitle = if (look.hasWallpaper) "Your picture, behind the whole window. Click to change it." else "Butler's dotted ground. Click to pick a picture.",
+        subtitle = if (look.hasWallpaper) "Your picture, behind the whole app. Tap to change it." else "None. Tap to pick a picture.",
         onClick = { pick.launch(arrayOf("image/*")) },
         icon = Icons.Rounded.Palette,
     )

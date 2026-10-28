@@ -191,6 +191,42 @@ fun ForYouFeed(
             )
             else -> {
                 val pick = state.current!!
+                val fav = pick.character.id in favorites
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                if (maxWidth < 600.dp) {
+                    // Phone: the card fills the width; the buttons sit along the bottom.
+                    Box(Modifier.fillMaxSize()) {
+                        PickCard(
+                            pick = pick,
+                            position = "${state.index + 1} of ${state.picks.size}",
+                            personaName = state.personaName,
+                            onOpen = { onOpenCharacter(pick.character.id) },
+                            portraitHeight = (maxWidth * 1.25f).coerceAtMost(560.dp),
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                            bottomRoom = 96.dp,
+                        )
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 10.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(ButlerTheme.colors.chrome)
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            RailButton(Icons.Rounded.KeyboardArrowUp, "Previous", enabled = state.index > 0, onClick = viewModel::previous)
+                            RailButton(Icons.Rounded.Block, "Not for me", tint = ButlerTheme.colors.textMed, onClick = viewModel::notForMe)
+                            RailButton(
+                                if (fav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                if (fav) "Unfavourite" else "Favourite",
+                                tint = if (fav) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                onClick = viewModel::toggleFavorite,
+                            )
+                            RailButton(Icons.Rounded.OpenInNew, "Open", onClick = { onOpenCharacter(pick.character.id) })
+                            RailButton(Icons.Rounded.KeyboardArrowDown, "Next", onClick = viewModel::next)
+                        }
+                    }
+                } else {
                 Row(
                     modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -211,7 +247,6 @@ fun ForYouFeed(
                         RailButton(Icons.Rounded.KeyboardArrowUp, "Previous", enabled = state.index > 0, onClick = viewModel::previous)
                         RailButton(Icons.Rounded.KeyboardArrowDown, "Next", onClick = viewModel::next)
                         Spacer(Modifier.height(12.dp))
-                        val fav = pick.character.id in favorites
                         RailButton(
                             if (fav) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                             if (fav) "Unfavourite" else "Favourite",
@@ -222,6 +257,8 @@ fun ForYouFeed(
                         RailButton(Icons.Rounded.Block, "Not for me", tint = ButlerTheme.colors.textMed, onClick = viewModel::notForMe)
                     }
                 }
+                }
+                }
             }
         }
     }
@@ -229,14 +266,22 @@ fun ForYouFeed(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PickCard(pick: ForYouPick, position: String, personaName: String?, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+private fun PickCard(
+    pick: ForYouPick,
+    position: String,
+    personaName: String?,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    portraitHeight: androidx.compose.ui.unit.Dp = 560.dp,
+    bottomRoom: androidx.compose.ui.unit.Dp = 24.dp,
+) {
     val c = pick.character
     val panel = Modifier
         .fillMaxWidth()
         .clip(RoundedCornerShape(14.dp))
         .background(ButlerTheme.colors.surfaceHigh)
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = bottomRoom),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
@@ -250,7 +295,7 @@ private fun PickCard(pick: ForYouPick, position: String, personaName: String?, o
             Spacer(Modifier.height(4.dp))
             Text("@${c.creatorName}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         }
-        Portrait(url = c.avatarUrl, obscured = c.isImageNsfw, chats = c.chatCount, onClick = onOpen)
+        Portrait(url = c.avatarUrl, obscured = c.isImageNsfw, chats = c.chatCount, onClick = onOpen, height = portraitHeight)
         Column(panel.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val facts = buildList {
                 if (c.totalTokens > 0) add("%,d tokens".format(c.totalTokens))
@@ -285,7 +330,7 @@ private fun PickCard(pick: ForYouPick, position: String, personaName: String?, o
 }
 
 @Composable
-private fun Portrait(url: String?, obscured: Boolean, chats: Long, onClick: () -> Unit) {
+private fun Portrait(url: String?, obscured: Boolean, chats: Long, onClick: () -> Unit, height: androidx.compose.ui.unit.Dp = 560.dp) {
     val context = LocalContext.current
     val widthPx = with(LocalDensity.current) { 560.dp.roundToPx() }
     val request = remember(url, obscured, widthPx) {
@@ -297,7 +342,7 @@ private fun Portrait(url: String?, obscured: Boolean, chats: Long, onClick: () -
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(560.dp)
+            .height(height)
             .clip(RoundedCornerShape(14.dp))
             .background(ButlerTheme.colors.surfaceHigh)
             .clickable(onClick = onClick),

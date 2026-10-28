@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.cherry.butler.ui.components.userMessage
 import javax.inject.Inject
 
 /**
@@ -31,7 +32,26 @@ class CreatorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val remote: CreatorRemoteSource,
     private val community: CommunityRemoteSource,
+    private val followed: com.cherry.butler.core.data.FollowedCreators,
+    private val favorites: com.cherry.butler.core.data.FavoritesRepository,
 ) : ViewModel() {
+
+    /** Fork: hearts on this creator's characters. */
+    val favoriteIds: StateFlow<Set<String>> = favorites.ids
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    fun toggleFavorite(id: String) {
+        val on = !favorites.isFavorite(id)
+        viewModelScope.launch {
+            favorites.set(id, on).onFailure { e ->
+                _notice.value = "Not ${if (on) "favourited" else "unfavourited"}. ${(e as? ApiError ?: ApiError.Unknown(e)).userMessage()}"
+                kotlinx.coroutines.delay(5_000)
+                _notice.value = null
+            }
+        }
+    }
+
 
     val userId: String = checkNotNull(savedStateHandle[Routes.ARG_USER_ID])
 
@@ -69,7 +89,11 @@ class CreatorViewModel @Inject constructor(
             runCatching { remote.profile(userId) }
                 .onSuccess { p -> _state.update { it.copy(profile = p, looks = CreatorCss.parse(p.style?.customStyle)) } }
                 .onFailure { e -> _state.update { it.copy(profileError = e as? ApiError ?: ApiError.Unknown(e)) } }
-            runCatching { community.isFollowing(userId) }.onSuccess { on -> _state.update { it.copy(following = on) } }
+            // Fork: the Follow button always shows. If Janitor won't say, the Following list does;
+            // failing both it reads "Follow", and a tap still follows.
+            val on = runCatching { community.isFollowing(userId) }.getOrNull()
+                ?: runCatching { followed.isFollowing(userId) }.getOrDefault(false)
+            _state.update { it.copy(following = on) }
         }
     }
 
@@ -133,10 +157,15 @@ class CreatorViewModel @Inject constructor(
     }
 
     fun toggleFollow() {
-        val now = _state.value.following ?: return
+        val now = _state.value.following ?: false
         _state.update { it.copy(following = !now) }
         viewModelScope.launch {
-            runCatching { community.setFollowing(userId, !now) }.onFailure { _state.update { it.copy(following = now) } }
+            runCatching { community.setFollowing(userId, !now) }
+                .onSuccess { followed.mark(userId, !now) }
+                .onFailure { e ->
+                    _state.update { it.copy(following = now) }
+                    _notice.value = "Not changed. ${(e as? ApiError ?: ApiError.Unknown(e)).userMessage()}"
+                }
         }
     }
 }
