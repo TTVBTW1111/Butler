@@ -398,6 +398,17 @@ private fun Content(
     onOpenCreator: () -> Unit = {},
     listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
 ) {
+    // Fork: the "Same art style" sheet, opened beside Similar characters.
+    var artStyle by remember { mutableStateOf(false) }
+    val styleDetail = state?.detail
+    if (artStyle && styleDetail != null) {
+        ArtStyleSheet(
+            detail = styleDetail,
+            similar = state?.similar.orEmpty(),
+            onOpenCharacter = onOpenCharacter,
+            onDismiss = { artStyle = false },
+        )
+    }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -512,6 +523,7 @@ private fun Content(
             onOpenPublished = onOpenPublished,
             onOpenCharacter = onOpenCharacter,
             onSeeAllPublished = onSeeAllPublished,
+            onArtStyle = { artStyle = true },
         )
     }
 }

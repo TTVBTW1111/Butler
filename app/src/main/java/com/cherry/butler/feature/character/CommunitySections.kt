@@ -53,6 +53,8 @@ fun LazyListScope.communitySections(
     onOpenPublished: (String) -> Unit,
     onOpenCharacter: (String) -> Unit,
     onSeeAllPublished: () -> Unit = {},
+    /** Fork: opens the characters drawn in the same art style. */
+    onArtStyle: (() -> Unit)? = null,
 ) {
     if (lorebooks.isNotEmpty()) {
         item(key = "lore-title", contentType = "section") { SectionTitle("Lorebooks") }
@@ -81,8 +83,13 @@ fun LazyListScope.communitySections(
     }
 
     val similar = state?.similar.orEmpty()
+    val styleReady = onArtStyle != null && state?.detail?.avatarUrl != null
+    if (similar.isNotEmpty() || styleReady) {
+        item(key = "similar-title", contentType = "section") {
+            SectionTitle("Similar characters", onSeeAll = if (styleReady) onArtStyle else null, seeAllLabel = "Same art style")
+        }
+    }
     if (similar.isNotEmpty()) {
-        item(key = "similar-title", contentType = "section") { SectionTitle("Similar characters") }
         similar.chunked(2).forEachIndexed { row, pair ->
             item(key = "similar-$row", contentType = "similar-row") {
                 val width = TileGrid.tileWidth()
@@ -110,7 +117,7 @@ fun LazyListScope.communitySections(
 }
 
 @Composable
-private fun SectionTitle(text: String, count: Int? = null, onSeeAll: (() -> Unit)? = null) {
+private fun SectionTitle(text: String, count: Int? = null, onSeeAll: (() -> Unit)? = null, seeAllLabel: String = "See all") {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = Roster.gutter, end = 8.dp, top = 24.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -126,7 +133,7 @@ private fun SectionTitle(text: String, count: Int? = null, onSeeAll: (() -> Unit
                 modifier = Modifier.clip(MaterialTheme.shapes.small).clickable(onClick = onSeeAll).padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("See all", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(seeAllLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             }
         }
