@@ -55,6 +55,9 @@ fun LazyListScope.communitySections(
     onSeeAllPublished: () -> Unit = {},
     /** Fork: opens the characters drawn in the same art style. */
     onArtStyle: (() -> Unit)? = null,
+    /** Fork: hearts on the similar cards (null draws none). */
+    favoriteIds: Set<String>? = null,
+    onFavorite: ((String) -> Unit)? = null,
 ) {
     if (lorebooks.isNotEmpty()) {
         item(key = "lore-title", contentType = "section") { SectionTitle("Lorebooks") }
@@ -106,6 +109,8 @@ fun LazyListScope.communitySections(
                             obscured = c.isImageNsfw,
                             nsfw = c.isNsfw,
                             chatCount = c.chatCount.takeIf { it > 0 }?.compactCount(),
+                            favorite = favoriteIds?.let { c.id in it },
+                            onFavorite = onFavorite?.let { f -> { f(c.id) } },
                         ) {
                             BrowseTileFooter(creatorName = c.creatorName, creatorVerified = c.creatorVerified, blurb = c.blurb, tags = c.tagNames, creatorColor = c.creatorColor)
                         }

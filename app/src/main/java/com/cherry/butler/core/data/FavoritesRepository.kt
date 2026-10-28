@@ -111,3 +111,32 @@ class FavoritesRepository @Inject constructor(
         const val MAX_PAGES = 60
     }
 }
+
+/**
+ * Creators you follow, read from the Following filter (fork): what the character page falls
+ * back on when Janitor won't answer "do I follow them?", so the Follow button never vanishes.
+ */
+@Singleton
+class FollowedCreators @Inject constructor(private val characters: CharacterRemoteSource) {
+    private var known: MutableSet<String>? = null
+    private val loading = Mutex()
+
+    suspend fun isFollowing(creatorId: String): Boolean = loading.withLock {
+        val set = known ?: HashSet<String>().also { found ->
+            runCatching {
+                val query = BrowseQuery(source = BrowseSource.Following, special = null)
+                for (page in 1..20) {
+                    val rows = characters.browse(query, page).data
+                    rows.forEach { found += it.creatorId }
+                    if (rows.size < CharacterRemoteSource.PAGE_SIZE) break
+                }
+            }
+            known = found
+        }
+        creatorId in set
+    }
+
+    fun mark(creatorId: String, on: Boolean) {
+        known?.let { if (on) it += creatorId else it -= creatorId }
+    }
+}

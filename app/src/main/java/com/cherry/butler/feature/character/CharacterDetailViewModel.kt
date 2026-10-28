@@ -58,6 +58,7 @@ class CharacterDetailViewModel @Inject constructor(
     private val community: CommunityRepository,
     private val profiles: com.cherry.butler.core.data.ProfileRepository,
     private val favorites: com.cherry.butler.core.data.FavoritesRepository,
+    private val followed: com.cherry.butler.core.data.FollowedCreators,
 ) : ViewModel() {
 
     /** Your own id, to know a character of yours: its page offers Edit instead of Block. */
@@ -85,6 +86,8 @@ class CharacterDetailViewModel @Inject constructor(
         viewModelScope.launch { personas.load() }
         viewModelScope.launch { runCatching { profiles.profile() } }
         loadCommunity()
+        // Fork: a page opened from the cache asks too, not only after a fresh read.
+        _state.value.detail?.creatorId?.let(::checkFollow)
         viewModelScope.launch {
             // Fork: the heart always shows. If Janitor won't say, the list read for the browse
             // hearts does; failing that it starts empty, and a tap still favourites.
@@ -105,7 +108,25 @@ class CharacterDetailViewModel @Inject constructor(
         if (followChecked || creatorId.isBlank()) return
         followChecked = true
         viewModelScope.launch {
-            runCatching { community.isFollowing(creatorId) }.onSuccess { on -> _state.update { it.copy(following = on) } }
+            // Fork: the button always shows. If Janitor won't say, the Following list does;
+            // failing both it reads "Follow", and a tap still follows.
+            val on = runCatching { community.isFollowing(creatorId) }.getOrNull()
+                ?: runCatching { followed.isFollowing(creatorId) }.getOrDefault(false)
+            _state.update { it.copy(following = on) }
+        }
+    }
+
+    /** Fork: every heart on this page (similar characters too), from the shared favourites. */
+    val favoriteIds: StateFlow<Set<String>> = favorites.ids
+
+    /** A heart on a similar (or same-style) card: at once, back as it was if Janitor says no. */
+    fun toggleFavoriteOf(id: String) {
+        if (id == characterId) return toggleFavorite()
+        val on = !favorites.isFavorite(id)
+        viewModelScope.launch {
+            favorites.set(id, on).onFailure { e ->
+                _state.update { it.copy(socialError = "Not ${if (on) "favourited" else "unfavourited"}. ${(e as? ApiError ?: ApiError.Unknown(e)).userMessage()}") }
+            }
         }
     }
 
@@ -136,7 +157,7 @@ class CharacterDetailViewModel @Inject constructor(
         val now = _state.value.following ?: return
         _state.update { it.copy(following = !now, socialError = null) }
         viewModelScope.launch {
-            runCatching { community.setFollowing(creatorId, !now) }.onFailure { e ->
+            runCatching { community.setFollowing(creatorId, !now) }.onSuccess { followed.mark(creatorId, !now) }.onFailure { e ->
                 _state.update { it.copy(following = now, socialError = "Not changed. ${e.userMessage()}") }
             }
         }

@@ -230,6 +230,8 @@ fun CharacterDetailScreen(
                         onOpenCharacter = onOpenCharacter,
                         onSeeAllPublished = { onSeeAllPublished(viewModel.characterId, header.name) },
                         onFollow = viewModel::toggleFollow,
+                        favoriteIds = viewModel.favoriteIds.collectAsStateWithLifecycle().value,
+                        onFavoriteOf = viewModel::toggleFavoriteOf,
                         onOpenCreator = { state.detail?.creatorId?.takeIf { it.isNotBlank() }?.let(onOpenCreator) },
                         listState = listState,
                     )
@@ -396,6 +398,8 @@ private fun Content(
     onSeeAllPublished: () -> Unit = {},
     onFollow: () -> Unit = {},
     onOpenCreator: () -> Unit = {},
+    favoriteIds: Set<String>? = null,
+    onFavoriteOf: ((String) -> Unit)? = null,
     listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
 ) {
     // Fork: the "Same art style" sheet, opened beside Similar characters.
@@ -407,6 +411,8 @@ private fun Content(
             similar = state?.similar.orEmpty(),
             onOpenCharacter = onOpenCharacter,
             onDismiss = { artStyle = false },
+            favoriteIds = favoriteIds,
+            onFavorite = onFavoriteOf,
         )
     }
     LazyColumn(
@@ -524,6 +530,8 @@ private fun Content(
             onOpenCharacter = onOpenCharacter,
             onSeeAllPublished = onSeeAllPublished,
             onArtStyle = { artStyle = true },
+            favoriteIds = favoriteIds,
+            onFavorite = onFavoriteOf,
         )
     }
 }

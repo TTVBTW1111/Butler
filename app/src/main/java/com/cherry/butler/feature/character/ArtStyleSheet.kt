@@ -131,6 +131,8 @@ fun ArtStyleSheet(
     similar: List<Character>,
     onOpenCharacter: (String) -> Unit,
     onDismiss: () -> Unit,
+    favoriteIds: Set<String>? = null,
+    onFavorite: ((String) -> Unit)? = null,
     viewModel: ArtStyleViewModel = androidx.hilt.navigation.compose.hiltViewModel(key = "art-style-${detail.id}"),
 ) {
     LaunchedEffect(detail.id) { viewModel.start(detail, similar) }
@@ -210,6 +212,8 @@ fun ArtStyleSheet(
                             obscured = c.isImageNsfw,
                             nsfw = c.isNsfw,
                             chatCount = c.chatCount.takeIf { it > 0 }?.compactCount(),
+                            favorite = favoriteIds?.let { c.id in it },
+                            onFavorite = onFavorite?.let { f -> { f(c.id) } },
                         ) {
                             com.cherry.butler.ui.components.BrowseTileFooter(creatorName = c.creatorName, creatorVerified = c.creatorVerified, blurb = c.blurb, tags = c.tagNames, creatorColor = c.creatorColor)
                         }
