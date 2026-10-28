@@ -193,7 +193,8 @@ fun ForYouFeed(
                 val pick = state.current!!
                 val fav = pick.character.id in favorites
                 androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
-                if (maxWidth < 600.dp) {
+                val wide = maxWidth
+                if (wide < 600.dp) {
                     // Phone: the card fills the width; the buttons sit along the bottom.
                     Box(Modifier.fillMaxSize()) {
                         PickCard(
@@ -201,7 +202,7 @@ fun ForYouFeed(
                             position = "${state.index + 1} of ${state.picks.size}",
                             personaName = state.personaName,
                             onOpen = { onOpenCharacter(pick.character.id) },
-                            portraitHeight = (maxWidth * 1.25f).coerceAtMost(560.dp),
+                            portraitHeight = (wide * 1.25f).coerceAtMost(560.dp),
                             modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
                             bottomRoom = 96.dp,
                         )
